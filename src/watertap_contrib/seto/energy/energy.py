@@ -39,3 +39,22 @@ def solar_energy(self):
     )
 
     self._fixed_perf_vars.append(self.electricity)
+
+
+def solar_heat(self):
+    """
+    Helper method for implementing heat production from solar energy models.
+
+    One variable is added to the model:
+        * electricity
+
+    """
+
+    # Add heat consumption/generation to model
+    self.heat = Var(
+        units=pyunits.kW,
+        bounds=(None, None),
+        doc="Heat production of solar process",
+    )
+
+    self._fixed_perf_vars.append(self.heat)
