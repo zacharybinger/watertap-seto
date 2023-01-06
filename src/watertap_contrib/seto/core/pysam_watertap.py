@@ -6,6 +6,10 @@ import PySAM.Grid as grid
 import PySAM.Utilityrate5 as utilityrate
 import PySAM.Singleowner as singleowner
 
+import PySAM.TroughPhysicalProcessHeat as iph
+import PySAM.IphToLcoefcr as iph_to_lcoefcr
+import PySAM.Lcoefcr as lcoefcr
+
 __author__ = "Kurban Sitterley, Matthew Boyd"
 
 
@@ -47,6 +51,10 @@ class PySAMWaterTAP:
         if self._pysam_model == "pv":
             self._pysam_model_name = "FlatPlatePVSingleOwner"
             self.setup_pv_single_owner()
+        
+        if self._pysam_model == "iph":
+            self._pysam_model_name = "PhysicalTroughIPHLCOHCalculator"
+            self.setup_iph()
 
     def setup_pv_single_owner(self):
         print(f"\nBuilding PySAM model {self._pysam_model_name}...\n")
@@ -68,6 +76,33 @@ class PySAMWaterTAP:
         self.tech_model.SolarResource.solar_resource_file = self._weather_file
 
         self._has_been_run = False
+
+    def setup_iph(self, model_name, config_files, weather_file):
+        self.tech_model = iph.new()
+        self.post_model = iph_to_lcoefcr.from_existing(self.tech_model, self._pysam_model_name)
+        self.cash_model = lcoefcr.from_existing(self.tech_model, self._pysam_model_name)
+        self._modules = [self.tech_model, self.post_model, self.cash_model]
+        self._load_config_files(self._config_files, self._modules)
+        self.tech_model.Weather.file_name = self._weather_file
+
+        # Determine storage cost component
+        self.capital_cost_orig = self.cash_model.value('capital_cost')
+        self.storage_cost_orig = self.tes_cost()
+        self.capital_cost_minus_storage = self.capital_cost_orig - self.storage_cost_orig
+        self.capital_cost_minus_storage_per_kW = self.capital_cost_minus_storage / self.system_capacity()
+
+        self.fixed_operating_cost_per_kW = self.cash_model.value('fixed_operating_cost') / self.system_capacity()
+
+        return {
+            'tech_model': self.tech_model,
+            'post_model': self.post_model,
+            'cash_model': self.cash_model,
+            'capital_cost_minus_storage_per_kW': self.capital_cost_minus_storage_per_kW,
+            'fixed_operating_cost_per_kW': self.fixed_operating_cost_per_kW
+        }
+
+    def system_capacity(self):
+        return self.tech_model.value('q_pb_design') * self.tech_model.value('specified_solar_multiple') * 1e3  # [kW]
 
     def run_pv_single_owner(
         self,
@@ -104,6 +139,12 @@ class PySAMWaterTAP:
         self.ac_capacity_factor = self.tech_model.Outputs.capacity_factor_ac
         self.lcoe_real = self.cash_model.Outputs.lcoe_real
         self._has_been_run = True
+
+    def tes_cost(self):
+        STORAGE_COST_SPECIFIC = 62                                  # [$/kWht] borrowed from physical power trough
+        tes_thermal_capacity = self.tech_model.value('q_pb_design') * 1e3 \
+                            * self.tech_model.value('tshours')          # [kWht]
+        return tes_thermal_capacity * STORAGE_COST_SPECIFIC
 
     def _size_pv_array(self, desired_size=50, desired_dcac_ratio=1.2):
         # Sizing rules
