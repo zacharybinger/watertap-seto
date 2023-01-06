@@ -1,5 +1,4 @@
 import json
-from os.path import join, dirname
 from math import floor, ceil
 import PySAM.Pvsamv1 as pv
 import PySAM.Grid as grid
@@ -21,38 +20,56 @@ class PySAMWaterTAP:
         grid_config_file=None,
         rate_config_file=None,
         cash_config_file=None,
+        post_config_file=None,
         weather_file=None,
         dcac_ratio=1.2,
     ):
 
         if pysam_model is None:
             raise Exception("PySAM module is required.")
-        if not all(
-            [tech_config_file, grid_config_file, rate_config_file, cash_config_file]
-        ):
-            raise Exception("One of the PySAM model configuration files is missing.")
+
         if weather_file is None:
             raise Exception("Weather file is required.")
 
         self._pysam_model = pysam_model
-        self._tech_config_file = tech_config_file
-        self._grid_config_file = grid_config_file
-        self._rate_config_file = rate_config_file
-        self._cash_config_file = cash_config_file
-        self._weather_file = weather_file
-        self._dcac_ratio = dcac_ratio
-        self._config_files = [
-            self._tech_config_file,
-            self._grid_config_file,
-            self._rate_config_file,
-            self._cash_config_file,
-        ]
 
+        self._weather_file = weather_file
         if self._pysam_model == "pv":
+            self._tech_config_file = tech_config_file
+            self._grid_config_file = grid_config_file
+            self._rate_config_file = rate_config_file
+            self._cash_config_file = cash_config_file
+            self._dcac_ratio = dcac_ratio
+            self._config_files = [
+                self._tech_config_file,
+                self._grid_config_file,
+                self._rate_config_file,
+                self._cash_config_file,
+            ]
+            if not all(
+                [tech_config_file, grid_config_file, rate_config_file, cash_config_file]
+            ):
+                raise Exception(
+                    "One of the PySAM model configuration files is missing."
+                )
+
             self._pysam_model_name = "FlatPlatePVSingleOwner"
             self.setup_pv_single_owner()
-        
+
         if self._pysam_model == "iph":
+            self._tech_config_file = tech_config_file
+            self._post_config_file = post_config_file
+            self._cash_config_file = cash_config_file
+            self._config_files = [
+                self._tech_config_file,
+                self._post_config_file,
+                self._cash_config_file,
+            ]
+            if not all([tech_config_file, post_config_file, cash_config_file]):
+                raise Exception(
+                    "One of the PySAM model configuration files is missing."
+                )
+
             self._pysam_model_name = "PhysicalTroughIPHLCOHCalculator"
             self.setup_iph()
 
@@ -77,32 +94,44 @@ class PySAMWaterTAP:
 
         self._has_been_run = False
 
-    def setup_iph(self, model_name, config_files, weather_file):
+    def setup_iph(self):
         self.tech_model = iph.new()
-        self.post_model = iph_to_lcoefcr.from_existing(self.tech_model, self._pysam_model_name)
+        self.post_model = iph_to_lcoefcr.from_existing(
+            self.tech_model, self._pysam_model_name
+        )
         self.cash_model = lcoefcr.from_existing(self.tech_model, self._pysam_model_name)
         self._modules = [self.tech_model, self.post_model, self.cash_model]
-        self._load_config_files(self._config_files, self._modules)
+        self._load_config_files()
         self.tech_model.Weather.file_name = self._weather_file
 
         # Determine storage cost component
-        self.capital_cost_orig = self.cash_model.value('capital_cost')
+        self.capital_cost_orig = self.cash_model.value("capital_cost")
         self.storage_cost_orig = self.tes_cost()
-        self.capital_cost_minus_storage = self.capital_cost_orig - self.storage_cost_orig
-        self.capital_cost_minus_storage_per_kW = self.capital_cost_minus_storage / self.system_capacity()
+        self.capital_cost_minus_storage = (
+            self.capital_cost_orig - self.storage_cost_orig
+        )
+        self.capital_cost_minus_storage_per_kW = (
+            self.capital_cost_minus_storage / self.system_capacity()
+        )
 
-        self.fixed_operating_cost_per_kW = self.cash_model.value('fixed_operating_cost') / self.system_capacity()
-
-        return {
-            'tech_model': self.tech_model,
-            'post_model': self.post_model,
-            'cash_model': self.cash_model,
-            'capital_cost_minus_storage_per_kW': self.capital_cost_minus_storage_per_kW,
-            'fixed_operating_cost_per_kW': self.fixed_operating_cost_per_kW
-        }
+        self.fixed_operating_cost_per_kW = (
+            self.cash_model.value("fixed_operating_cost") / self.system_capacity()
+        )
+        self._has_been_run = False
+        # return {
+        #     'tech_model': self.tech_model,
+        #     'post_model': self.post_model,
+        #     'cash_model': self.cash_model,
+        #     'capital_cost_minus_storage_per_kW': self.capital_cost_minus_storage_per_kW,
+        #     'fixed_operating_cost_per_kW': self.fixed_operating_cost_per_kW
+        # }
 
     def system_capacity(self):
-        return self.tech_model.value('q_pb_design') * self.tech_model.value('specified_solar_multiple') * 1e3  # [kW]
+        return (
+            self.tech_model.value("q_pb_design")
+            * self.tech_model.value("specified_solar_multiple")
+            * 1e3
+        )  # [kW]
 
     def run_pv_single_owner(
         self,
@@ -140,10 +169,78 @@ class PySAMWaterTAP:
         self.lcoe_real = self.cash_model.Outputs.lcoe_real
         self._has_been_run = True
 
+    def run_iph(self, heat_load=None, hours_storage=None):
+        # tech_model = modules['tech_model']
+        # post_model = modules['post_model']
+        # cash_model = modules['cash_model']
+        self.heat_load = heat_load
+        self.hours_storage = hours_storage
+        if heat_load is not None:
+            self.tech_model.value("q_pb_design", heat_load)
+        if hours_storage is not None:
+            self.tech_model.value("tshours", hours_storage)
+        print(
+            f"\nRunning PySAM model {self._pysam_model_name} for heat load = {self.heat_load} and {self.hours_storage} hr storage...\n"
+        )
+        self.tech_model.execute()
+        self.post_model.value(
+            "fixed_operating_cost",
+            self.fixed_operating_cost_per_kW * self.system_capacity(),
+        )
+        self.post_model.execute()
+        self.cash_model.value(
+            "capital_cost",
+            self.capital_cost_minus_storage_per_kW * self.system_capacity()
+            + self.tes_cost(),
+        )
+        self.cash_model.execute()
+
+        self.annual_energy = (
+            self.tech_model.Outputs.annual_energy
+        )  # [kWht] net, does not include that used for freeze protection
+        self.annual_gross_energy = self.tech_model.Outputs.annual_gross_energy  # [kWht]
+        self.freeze_protection = (
+            self.tech_model.Outputs.annual_thermal_consumption
+        )  # [kWht]
+        self.capacity_factor = self.tech_model.Outputs.capacity_factor  # [%]
+        self.electrical_load = (
+            self.tech_model.Outputs.annual_electricity_consumption
+        )  # [kWhe]
+        self.lcoh = self.cash_model.Outputs.lcoe_fcr  # [$/kWht]
+        self.capital_cost = self.cash_model.value("capital_cost")  # [$]
+        self.fixed_operating_cost = self.cash_model.value(
+            "fixed_operating_cost"
+        )  # [$] more than shown in UI, includes electricity purchases
+        self.variable_operating_cost = self.cash_model.value(
+            "variable_operating_cost"
+        )  # [$]
+        self._has_been_run = True
+
+        print(f"Annual energy gen = {self.annual_energy} kWht net")
+        print(f"LCOH = {self.lcoh} $/kWht")
+        print(f"Capital cost = ${self.capital_cost}")
+        print(f"Electrical load = {self.electrical_load} kWhe/yr")
+        print(f"Fixed operating cost = {self.fixed_operating_cost} $/yr")
+        print(f"Variable operating cost = {self.variable_operating_cost} $/yr")
+
+        # return {
+        #     'annual_energy': annual_energy,                         # [kWh] annual net thermal energy in year 1
+        #     'freeze_protection': freeze_protection,                 # [kWht]
+        #     'capacity_factor': capacity_factor,                     # [%] capacity factor
+        #     'electrical_load': electrical_load,                     # [kWhe]
+        #     'lcoh': lcoh,                                           # [$/kWht] LCOH
+        #     'capital_cost': capital_cost,                           # [$]
+        #     'fixed_operating_cost': fixed_operating_cost,           # [$]
+        #     'variable_operating_cost': variable_operating_cost,     # [$]
+        #     }
+
     def tes_cost(self):
-        STORAGE_COST_SPECIFIC = 62                                  # [$/kWht] borrowed from physical power trough
-        tes_thermal_capacity = self.tech_model.value('q_pb_design') * 1e3 \
-                            * self.tech_model.value('tshours')          # [kWht]
+        STORAGE_COST_SPECIFIC = 62  # [$/kWht] borrowed from physical power trough
+        tes_thermal_capacity = (
+            self.tech_model.value("q_pb_design")
+            * 1e3
+            * self.tech_model.value("tshours")
+        )  # [kWht]
         return tes_thermal_capacity * STORAGE_COST_SPECIFIC
 
     def _size_pv_array(self, desired_size=50, desired_dcac_ratio=1.2):
