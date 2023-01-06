@@ -1,0 +1,11 @@
+default:
+  heat:
+    value: 0
+    units: kW
+
+  electricity:
+    value: 0
+    units: kW
+
+
+
