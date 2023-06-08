@@ -60,9 +60,8 @@ __author__ = "Zhuoran Zhang"
 _log = idaeslog.getLogger(__name__)
 solver = get_solver()
 def build_pv_battery_flowsheet(m = None,
-                            #    GHI = 100,
                                pv_gen = 1000,
-                               electricity_price = 0.0,
+                               electricity_price = 0.1,
                                ro_capacity = 6000,
                                ro_elec_req = 944.3):
     """Builds the structure of the PV-RO-battery system
@@ -79,7 +78,6 @@ def build_pv_battery_flowsheet(m = None,
     m.fs.pv.size.fix(2000)
     # m.fs.pv.global_horizontal_irrad.fix(GHI)
     battery = add_battery(m)
-
     m.fs.pv_to_ro = Var(
             initialize = 100,
             bounds = (0,None),
@@ -120,11 +118,14 @@ def build_pv_battery_flowsheet(m = None,
         )
 
     # Add grid electricity cost
-    @m.Expression(doc="grid electricity cost")
+    @m.Expression(doc="grid cost")
     def grid_cost(b):
         return (electricity_price * b.fs.grid_to_ro * b.fs.battery.dt)
     
-    
+    # Add grid electricity cost
+    @m.Expression(doc="electricity cost")
+    def elec_cost(b):
+        return (electricity_price * 1)
 
     return m
 

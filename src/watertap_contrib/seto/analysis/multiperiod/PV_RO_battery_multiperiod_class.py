@@ -23,7 +23,7 @@ from matplotlib.ticker import PercentFormatter
 import matplotlib.dates as mdates
 import seaborn as sns
 from idaes.core.surrogate.pysmo_surrogate import PysmoRBFTrainer, PysmoSurrogate
-
+from pyomo.environ import Var, value, units as pyunits
 __author__ = "Zhuoran Zhang, Mukta Hardikar, Zachary Binger"
 
 _log = idaeslog.getLogger(__name__)
@@ -74,12 +74,6 @@ def unfix_dof(m):
 # PV surrogate output for 4 select days
 file_path = '/Users/zbinger/watertap-seto/src/watertap_contrib/seto/analysis/multiperiod'
 
-# Arbitrary electricity costs
-elec_price_df = pd.read_csv(file_path +'/data_files/elec_price.csv',index_col='time (h)')
-elec_price = np.array(elec_price_df['elec_price'].values)
-elec_price = np.append(elec_price,elec_price)
-elec_price = np.append(elec_price,elec_price)
-
 electric_tiers = {'Tier 1':0.19825,'Tier 2':0.06124,'Tier 3':0.24445,'Tier 4':0.06126}
 
 def get_rep_weeks():
@@ -93,9 +87,21 @@ def get_rep_weeks():
 
 def get_elec_tier(day, time):
     if day.weekday():
-        print('Weekday')
+        if (day.month < 4) | day.month > 10:
+            if (time < 12) | (time > 18):
+                return electric_tiers['Tier 2']
+            else:
+                return electric_tiers['Tier 1']
+        else:
+            if (time < 12) | (time > 18):
+                return electric_tiers['Tier 4']
+            else:
+                return electric_tiers['Tier 3']
     else:
-        print('Weekend')
+        if (day.month < 4) | day.month > 10:
+            return electric_tiers['Tier 2']
+        else:
+            return electric_tiers['Tier 4']
 
 
 
@@ -106,7 +112,7 @@ def create_multiperiod_pv_battery_model(
         ro_elec_req = 944.3, # kW
         cost_battery_power = 75, # $/kW
         cost_battery_energy = 50, # $/kWh      
-        elec_price = elec_price,
+        elec_price = 0.15,
         surrogate = None,
         start_date = None
     ):
@@ -134,7 +140,8 @@ def create_multiperiod_pv_battery_model(
         
     flowsheet_options={ t: { 
                             "pv_gen": eval_surrogate(surrogate, ro_elec_req, t%24, t//24),
-                            "elec_price": elec_price[t],
+                            # "elec_price": elec_price[t],
+                            "electricity_price": get_elec_tier(start_date+datetime.timedelta(days=t//24), t%24),
                             "ro_capacity": ro_capacity, 
                             "ro_elec_req": ro_elec_req} 
                             for t in range(n_time_points)
@@ -151,11 +158,8 @@ def create_multiperiod_pv_battery_model(
 
     # initialize the beginning status of the system
     mp.blocks[0].process.fs.battery.initial_state_of_charge.fix(0)
-    # mp.blocks[23].process.fs.battery.initial_state_of_charge.fix(10)
-    # mp.blocks[47].process.fs.battery.initial_state_of_charge.fix(10)
-    # mp.blocks[71].process.fs.battery.initial_state_of_charge.fix(10)
-    # mp.blocks[95].process.fs.battery.initial_state_of_charge.fix(10)
-    # mp.blocks[0].process.fs.battery.initial_energy_throughput.fix(0)
+    # for day in range(1,7):
+    #     mp.blocks[day*24-1].process.fs.battery.initial_state_of_charge.fix(10)
 
     # Add battery cost function
     @mp.Expression(doc="battery cost")
@@ -193,32 +197,32 @@ def create_multiperiod_pv_battery_model(
 
     return mp
 
-def create_plot(mp, idx):
+def create_plot(mp, idx, elec_prices):
     # Create diagrams
     # plt.clf()
     colors=['#235789', '#4A7C59', '#F1A208']
     n = 7*24
     titles = ['Summer','Winter','Spring', 'Fall']
-    hour = [i for i in range(1,97)]
+    hour = [i for i in range(1,n+1)]
     battery_state = [value(mp.blocks[i].process.fs.battery.state_of_charge[0]) for i in range(n)]
     pv_gen = [value(mp.blocks[i].process.fs.pv.elec_generation) for i in range(n)]
     pv_curtail = [value(mp.blocks[i].process.fs.curtailment) for i in range(n)]
-
+    electric_price = [value(mp.blocks[i].process.fs.elec_price) for i in range(n)]
     axes[idx].plot(hour, battery_state, 'r', label='Battery state (kWh)')
     axes[idx].plot(hour, pv_gen, 'k', label = 'PV generation (kWh)')
     axes[idx].plot(hour, pv_curtail, 'g', label = 'PV curtailment (kWh)')
     axes[idx].vlines(x=[24,48,72,96],ymin=0,ymax=6000,linestyle='--',color='black')
-    axes[idx].set_ylim([0,6000])
-    axes[idx].set_xlim([1,100])
+    axes[idx].set_ylim([0,20000])
+    axes[idx].set_xlim([1,n])
     axes[idx].set_ylabel('  Energy (kWh)', loc='center')
     axes[idx].set_xlabel('Operation Hours')
     axes[idx].legend(loc="upper left", frameon = False)
     axes[idx].set_title(titles[idx], loc='center', x=-0.09, y=0.5, rotation=90, fontweight='bold', ha='center', va='center')
 
     ax3 = axes[idx].twinx()
-    ax3.plot(hour, elec_price,'--',label='Grid Price')
+    ax3.plot(hour, elec_prices,'--',label='Grid Price')
     ax3.set_ylabel('Grid Price ($/kWh)', ha='center', va='center')
-    ax3.set_ylim([0,3])
+    ax3.set_ylim([0,0.3])
     ax3.legend(loc="upper right", frameon = False, fontsize = 'small')
 
     pv_to_ro = np.array([value(mp.blocks[i].process.fs.pv_to_ro) for i in range(n)])
@@ -226,15 +230,16 @@ def create_plot(mp, idx):
     grid_to_ro = np.array([value(mp.blocks[i].process.fs.grid_to_ro) for i in range(n)])
     labels=["PV to RO", "Battery to RO", "Grid to RO"]
 
-    # frames = []
-    # for label in labels:
-    #     frames.append(pd.DataFrame([hour, pv_to_ro, [label]*len(pv_to_ro)]).transpose())
-    # df2 = pd.concat(frames)
-    # df2.columns = ['Hour', 'State', 'Type']
+    frames = []
+    for label in labels:
+        frames.append(pd.DataFrame([hour, pv_to_ro, [label]*len(pv_to_ro)]).transpose())
+    df2 = pd.concat(frames)
+    df2.columns = ['Hour', 'State', 'Type']
 
-    # df = pd.DataFrame([hour, pv_to_ro, battery_to_ro, grid_to_ro]).transpose()
-    # df.columns = ["Hour", "PV to RO", "Battery to RO", "Grid to RO"]
+    df = pd.DataFrame([hour, pv_to_ro, battery_to_ro, grid_to_ro]).transpose()
+    df.columns = ["Hour", "PV to RO", "Battery to RO", "Grid to RO"]
 
+    df.to_csv('/Users/zbinger/watertap-seto/src/watertap_contrib/seto/analysis/multiperiod/data_files/sim_results.csv')
     # ax2.set_xlabel('Hour (June 18th)')
     axes2[idx].set_ylabel('  Load %', loc='center')
     axes2[idx].set_xlabel('Operation Hours')
@@ -244,29 +249,31 @@ def create_plot(mp, idx):
     axes2[idx].yaxis.set_major_formatter(mtick.PercentFormatter()) 
     axes2[idx].vlines(x=[24,48,72,96],ymin=0,ymax=1000,linestyle='--',color='black')
     axes2[idx].set_ylim([0,100])
-    axes2[idx].set_xlim([1,100])
+    axes2[idx].set_xlim([1,n])
     axes2[idx].set_title(titles[idx], loc='center', x=-0.08, y=0.5, rotation=90, fontweight='bold', ha='center', va='center')
     
 if __name__ == "__main__":
     rep_days, key_days = get_rep_weeks()
-    print(key_days[0])
-    get_elec_tier(key_days[0], 4)
-    fig,  axes= plt.subplots(4, figsize=(14,10))
-    fig2,  axes2= plt.subplots(4, figsize=(14,10))
+    fig,  axes= plt.subplots(4, figsize=(20,10))
+    fig2,  axes2= plt.subplots(4, figsize=(20,10))
     for idx, period in enumerate(['Summer Solstice','Winter Solstice','Spring Eq', 'Fall Eq']):
         surr = load_surrogate(surrogate_filename=join('/Users/zbinger/watertap-seto/src/watertap_contrib/seto/analysis/net_metering/pysam_data/', "pv_"+period.replace(" ","_")+"_surrogate_week.json"))
+        elec_prices = ([get_elec_tier(key_days[idx]+datetime.timedelta(days=t//24), t%24) for t in range(7*24)])
         mp = create_multiperiod_pv_battery_model(surrogate = surr, start_date = key_days[idx])
-    #     results = solver.solve(mp)
-    #     create_plot(mp, idx)
-    #     fig.tight_layout()
-    #     fig2.tight_layout()
+        results = solver.solve(mp)
+        create_plot(mp, idx, elec_prices)
+        fig.tight_layout()
+        fig2.tight_layout()
         
-    # # for i in range(96):
-    # #     print(f'battery status at hour: {i}', value(mp.blocks[i].process.fs.battery.state_of_charge[0]))    
-    # #     print('pv gen(kW): ', value(mp.blocks[i].process.fs.curtailment))
+    # for i in range(96):
+    #     print(f'battery status at hour: {i}', value(mp.blocks[i].process.fs.battery.state_of_charge[0]))    
+    #     print('pv gen(kW): ', value(mp.blocks[i].process.fs.curtailment))
     # print('pv size: ', value(mp.blocks[0].process.fs.pv.size))
     # print('battery power: ', value(mp.blocks[0].process.fs.battery.nameplate_power))
     # print('battery energy: ', value(mp.blocks[0].process.fs.battery.nameplate_energy))
     # print('total cost: ', value(mp.LCOW))
 
-    # plt.show()
+    # for v in mp.blocks[1].component_data_objects(Var, descend_into=True):
+    #     print(v, value(v))
+
+    plt.show()
