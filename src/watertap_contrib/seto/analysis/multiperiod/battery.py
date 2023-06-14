@@ -115,13 +115,13 @@ class BatteryStorageData(UnitModelBlockData):
                            within=NonNegativeReals,
                            initialize=0.0,
                            doc="Energy in",
-                           units=pyunits.kW)
+                           units=pyunits.kWh)
 
         self.elec_out = Var(self.flowsheet().config.time,
                             within=NonNegativeReals,
                             initialize=0.0,
                             doc="Energy out",
-                            units=pyunits.kW)
+                            units=pyunits.kWh)
 
         self.state_of_charge = Var(self.flowsheet().config.time,
                                    within=NonNegativeReals,
