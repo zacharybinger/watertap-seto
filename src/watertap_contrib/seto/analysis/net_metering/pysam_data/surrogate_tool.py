@@ -130,6 +130,7 @@ def get_training_validation(dataset_filename, sample_frac=1, training_fraction=0
 def create_rbf_surrogate(
     training_dataframe, input_labels, output_labels, output_filename=None
 ):
+    # TODO Make sure no less than 0
     print('Creating Surrogate Model...\n')
     time_start = time.process_time()
     # Capture long output
@@ -212,7 +213,6 @@ def plot_parity(true_values, modeled_values, color='k', label=None, axes=None, t
     ax.annotate(f'$R^2$ = {R_val}', (0.05*data_bound,0.9*data_bound), size=12)
     # ax.tight_layout()
     # plt.savefig(f'/Users/zbinger/watertap-seto/src/watertap_contrib/seto/solar_models/surrogate/plots/parity_plot_{label}.png', dpi=300)
-
 
 def plot_training_validation(
     surrogate, data_training, data_validation, input_labels, output_labels, save=False
@@ -353,7 +353,7 @@ def create_training_data():
     data = []
     pv_size = np.linspace(10,100000,30) ################################
     pv_size = np.logspace(1,5,30) ################################
-    pv_size = np.logspace(1,5,10) ################################
+    pv_size = np.logspace(3,4,2) ################################
     df = pd.DataFrame()
 
     time_start = time.process_time()
@@ -364,7 +364,7 @@ def create_training_data():
     print("Multiprocessing time:", time_stop - time_start, "\n")
     df = pd.concat(results)
     key_df = get_rep_weeks(df)
-
+    key_df.loc[key_df['hourly_gen'] < 0, 'hourly_gen'] = 0
     return key_df
 
 def create_yearly_surrogate():
@@ -408,9 +408,7 @@ def create_yearly_surrogate():
     surrogate, data_training, data_validation, ['design_size', 'month'], selected_labels
     )
 
-def create_daily_surrogate():
-    key_df = create_training_data()
-    fig, ax = plt.subplots(2,4,figsize=(14,12))
+def create_daily_surrogate(key_df):
     for idx, period in enumerate(key_df['Key'].unique()):
         period_df = key_df.loc[key_df['Key'] == period].copy()
         data = period_df
@@ -418,7 +416,7 @@ def create_daily_surrogate():
             data, 0.95, seed=7 ######################################
         ) 
 
-        surrogate_filename = join(dirname(__file__), "pv_"+period.replace(" ","_")+"_surrogate_week.json")
+        surrogate_filename = join(dirname(__file__), "pv_"+period.replace(" ","_")+"_surrogate_test.json")
         surrogate = create_rbf_surrogate(
             data_training, ['design_size', 'Hour', 'Day'], ['hourly_gen'], output_filename=surrogate_filename
         )
@@ -454,14 +452,28 @@ def evaluate_surrogate(data, surrogate = None, surrogate_filename = None, size=1
     for idx, period in enumerate(data['Key'].unique()):
         for idx2, day in enumerate(data['Day'].unique()):
             surrogate = load_surrogate(join(dirname(__file__), "pv_"+period.replace(" ","_")+"_surrogate_week.json"))
+
             period_df = data.loc[(data['Key'] == period) & (data['design_size'] == size) & (data['Day'] == day)].copy()
+            print(period_df)
             surr_eval = surrogate.evaluate_surrogate(period_df[input_labels])
-            ax[idx, idx2].plot(period_df['Hour'], period_df['hourly_gen'], 'o', color='black')
-            ax[idx, idx2].plot(period_df['Hour'], surr_eval['hourly_gen'], '-.', color='red')
-  
+            print(surr_eval)
+            ax[idx, idx2].plot(period_df['Hour'], period_df['hourly_gen'], '-.', linewidth=2, color='black', label='SAM')
+            ax[idx, idx2].plot(period_df['Hour'], surr_eval['hourly_gen'], '-.', linewidth=2, color='red', label='Surrogate')
+            ax[idx, idx2].set_xlim([0,24])
+            ax[idx, idx2].legend(loc="upper left", frameon = False)
+    
+    for pos in range(4):
+        ax[pos,0].set_ylabel('Power Gen. (kW)')
+    for pos in range(7):
+        ax[3,pos].set_xlabel('Hour of Day')
+    # plot_key_day_parities(
+    #         0, surrogate, data_training, data_validation, ['design_size', 'Hour', 'Day'], selected_labels, axes=ax, title=period
+    #     )
+    plt.tight_layout()
+    # plt.savefig('/Users/zbinger/watertap-seto/src/watertap_contrib/seto/solar_models/surrogate/plots/week_surrogate_vs_exp.png', dpi=900)
     plt.show()
 
 if __name__ == "__main__":
-    create_daily_surrogate()
     data = create_training_data()
-    evaluate_surrogate(data, surrogate_filename='/Users/zbinger/watertap-seto/src/watertap_contrib/seto/analysis/net_metering/pysam_data/pv_Winter_Solstice_surrogate_week.json')
+    create_daily_surrogate(data)
+    evaluate_surrogate(data, surrogate_filename='/Users/zbinger/watertap-seto/src/watertap_contrib/seto/analysis/net_metering/pysam_data/pv_Winter_Solstice_surrogate_test.json')

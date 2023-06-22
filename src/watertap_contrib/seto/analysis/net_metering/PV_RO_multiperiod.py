@@ -51,17 +51,17 @@ from watertap_contrib.seto.costing import (
 )
 from watertap_contrib.seto.solar_models.zero_order import Photovoltaic
 from watertap_contrib.seto.core import SETODatabase, PySAMWaterTAP
-from watertap_contrib.seto.analysis.multiperiod.PV_dummy import PVdummy
+# # from watertap_contrib.seto.unit_models.surrogate import PVdummy
+from watertap_contrib.seto.solar_models.surrogate.pv import PVSurrogate
+from dispatches.unit_models.battery import BatteryStorage
 
-from watertap_contrib.seto.analysis.multiperiod.battery import BatteryStorage
-
-__author__ = "Zhuoran Zhang"
+__author__ = "Zachary Binger"
 
 _log = idaeslog.getLogger(__name__)
 solver = get_solver()
 def build_pv_battery_flowsheet(m = None,
-                               pv_gen = 1000,
-                               electricity_price = 0.1,
+                               GHI = 1000,
+                               elec_price = 0.07,
                                ro_capacity = 6000,
                                ro_elec_req = 944.3):
     """Builds the structure of the PV-RO-battery system
@@ -69,20 +69,13 @@ def build_pv_battery_flowsheet(m = None,
     Returns:
         object: A Pyomo concrete optimization model and flowsheet
     """
-    if m is None:
-        m = ConcreteModel()
+
+    m = ConcreteModel()
     m.fs = FlowsheetBlock(dynamic=False)
-    # m.fs.pv = PVdummy()
-    # m.fs.pv.elec_generation.fix(pv_gen)
-    # m.fs.pv.size.fix(ro_elec_req)
-    m.fs.pv_size = ro_elec_req
-    battery = add_battery(m)
+    m.fs.pv = PVSurrogate()
 
-    if "USD_2021" not in pyunits._pint_registry:
-            pyunits.load_definitions_from_strings(
-                ["USD_2021 = 500/708.0 * USD_CE500"]
-            )
-
+    m.fs.battery = BatteryStorage()
+    
     m.fs.pv_to_ro = Var(
             initialize = 100,
             bounds = (0,None),
@@ -101,27 +94,12 @@ def build_pv_battery_flowsheet(m = None,
             units = pyunits.kW,
             doc = 'PV curtailment'
         )
-    
-    m.fs.elec_price = Var(
-            initialize = electricity_price,
-            bounds = (0,None),
-            units = pyunits.USD_2021,
-            doc = 'Electric Cost'
-        )
-    
-    m.fs.elec_generation = Var(
-            initialize = pv_gen,
-            bounds = (0,None),
-            units = pyunits.kW,
-            doc = 'PV Power Gen'
-        )
-    
+
     # Add energy flow balance
-    @m.Constraint(doc="System energy flow")
+    @m.Constraint(doc="PV electricity generation")
     def eq_pv_elec_gen(b):
         return (
-        pv_gen == b.fs.pv_to_ro + b.fs.battery.elec_in[0] + b.fs.curtailment
-        # pv_gen == b.fs.pv_to_ro + b.fs.battery.elec_in[0] + b.fs.curtailment
+        b.fs.pv.annual_energy == b.fs.pv_to_ro + b.fs.battery.elec_in[0] + b.fs.curtailment
         )
 
     @m.Constraint(doc="RO electricity requirment")
@@ -130,20 +108,9 @@ def build_pv_battery_flowsheet(m = None,
         )
 
     # Add grid electricity cost
-    @m.Expression(doc="grid cost")
+    @m.Expression(doc="grid electricity cost")
     def grid_cost(b):
-        return (electricity_price * b.fs.grid_to_ro * b.fs.battery.dt)
-    
-    # # Add grid electricity cost
-    # @m.Expression(doc="electricity cost")
-    # def elec_cost(b):
-    #     return (electricity_price * 1)
-    
-    # Add grid electricity cost
-    @m.Constraint(doc="PV electricity generation")
-    def pv_elec_gen(b):
-        return (pv_gen == m.fs.elec_generation * 1)
-
+        return (elec_price * b.fs.grid_to_ro * b.fs.battery.dt)
 
     return m
 
@@ -161,33 +128,17 @@ def fix_dof_and_initialize(
     """
     m.fs.battery.initialize(outlvl=outlvl)
 
-    return 
+    return m
 
-
-def add_battery(m):
-    m.fs.battery = BatteryStorage()
-    m.fs.battery.charging_eta.set_value(0.95)
-    m.fs.battery.discharging_eta.set_value(0.95)
-    m.fs.battery.dt.set_value(1) # hr
-
-
-    return m.fs.battery
 
 if __name__ == "__main__":
     m = build_pv_battery_flowsheet()
-    print(f'{value(m.fs.elec_generation):<10,.1f}', pyunits.get_units(m.fs.elec_generation))
     fix_dof_and_initialize(m)
-    print(f'{value(m.fs.elec_generation):<10,.1f}', pyunits.get_units(m.fs.elec_generation))
     results = solver.solve(m)
-    print(f'{value(m.fs.elec_generation):<10,.1f}', pyunits.get_units(m.fs.elec_generation))
 
-    print('initial state of charge: ',  f'{value(m.fs.battery.initial_state_of_charge)}')
-    print('state of charge: ',          f'{value(m.fs.battery.state_of_charge[0])}')
-    print('energy throughput: ',        f'{value(m.fs.battery.energy_throughput[0])}')
-    print('battery power: ',            f'{value(m.fs.battery.nameplate_power)}')
-    print('battery energy: ',           f'{value(m.fs.battery.nameplate_energy)}')
-    print('electricity generation: ',   f'{value(m.fs.elec_generation)}')
-
-    print('\n')
-    for v in m.fs.component_data_objects(ctype=Var, active=True, descend_into=True):
-            print(f'{str(v):<40s}', f'{value(v):<10,.1f}', pyunits.get_units(v))
+    print('initial state of charge: ', value(m.fs.battery.initial_state_of_charge))
+    print('state of charge: ', value(m.fs.battery.state_of_charge[0]))
+    print('energy throughput: ', value(m.fs.battery.energy_throughput[0]))
+    print('pv size: ', value(m.fs.pv.size))
+    print('battery power: ', value(m.fs.battery.nameplate_power))
+    print('battery energy: ', value(m.fs.battery.nameplate_energy))

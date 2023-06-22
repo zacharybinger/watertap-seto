@@ -89,9 +89,9 @@ class PVDUMMYData(UnitModelBlockData):
         self.scaling_factor = Suffix(direction=Suffix.EXPORT)
 
         self.elec_generation = Var(
-            initialize=650,
+            initialize=0,
             bounds=(0, None),
-            units=pyunits.kW * pyunits.h,
+            units=pyunits.kW,
             doc="Electricity generation",
         )
 
@@ -102,12 +102,6 @@ class PVDUMMYData(UnitModelBlockData):
             doc = 'PV size'
         )
 
-        self.global_horizontal_irrad = Var(
-            initialize = 1000,
-            bounds = (0,None),
-            units = pyunits.W / pyunits.m**2,
-            doc = 'GHI'
-        )
         if "USD_2021" not in pyo.units._pint_registry:
             pyo.units.load_definitions_from_strings(
                 ["USD_2021 = 500/708.0 * USD_CE500"]
@@ -125,13 +119,14 @@ class PVDUMMYData(UnitModelBlockData):
             units=pyunits.USD_2021 / pyunits.kW,
             doc="Unit capital cost",
         )
-
-        @self.Constraint(doc="calculate electricity generation")
-        def eq_elec_gen(b):
-            return (
-                b.elec_generation == 650 * b.global_horizontal_irrad / (1000 * pyunits.W / pyunits.m**2)
-                                   * b.size / (1000 * pyunits.kW)
-            )        
+        print(self.elec_generation())
+        print(value(self.elec_generation))
+        # @self.Constraint(doc="calculate electricity generation")
+        # def eq_elec_gen(b):
+        #     return (
+        #         b.elec_generation == 650 * b.global_horizontal_irrad / (1000 * pyunits.W / pyunits.m**2)
+        #                            * b.size / (1000 * pyunits.kW)
+        #     )        
         
     def calculate_scaling_factors(self):
         super().calculate_scaling_factors()
@@ -141,9 +136,6 @@ class PVDUMMYData(UnitModelBlockData):
 
         if iscale.get_scaling_factor(self.size) is None:
             iscale.set_scaling_factor(self.size, 1e-3)
-
-        if iscale.get_scaling_factor(self.global_horizontal_irrad) is None:
-            iscale.set_scaling_factor(self.global_horizontal_irrad, 1e-3)
 
         sf = iscale.get_scaling_factor(self.elec_generation)
         iscale.constraint_scaling_transform(self.eq_elec_gen, sf)
