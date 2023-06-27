@@ -60,11 +60,32 @@ def build_flat_plate_flowsheet(
     m.fs = FlowsheetBlock(dynamic=False)
     m.fs.properties = NaClParameterBlock()
     m.fs.VAGMD = MDdummy()
+    m.fs.FPC = FlatPlatePhysical()
+    m.fs.TES = HeatStorage()
 
-    storage = add_stroage(m)
-    # m.fs.membrane_area = ro_elec_req
+    # Initial values for Flat Plate Collector
+    m.fs.FPC.area_coll.set_value(2.98)
+    m.fs.FPC.FRta.set_value(0.689)
+    m.fs.FPC.FRUL.set_value(3.85)
+    m.fs.FPC.iam.set_value(0.2)
+    m.fs.FPC.mdot_test.set_value(0.045528)
+    m.fs.FPC.cp_test.set_value(3400)  # specific heat of glycol [J/kg-K]
+    m.fs.FPC.cp_use.set_value(3400)  # specific heat of glycol [J/kg-K]
+    m.fs.FPC.ncoll.set_value(2)
+    m.fs.FPC.pump_watts.set_value(45)
+    m.fs.FPC.pump_eff.set_value(0.85)
+    m.fs.FPC.T_amb.set_value(12)  # default SAM model at noon on Jan. 1
+    m.fs.FPC.T_in.set_value(38.2)  # default SAM model at noon on Jan. 1
+    m.fs.FPC.G_trans.set_value(540)  # default SAM model at noon on Jan. 1
+
+    # Initial values for Membrane Distillation
     m.fs.VAGMD.STEC = 100
     m.fs.VAGMD.permeate_flow_rate.fix(5e-5)
+
+    # initial values for Thermal Storage
+    m.fs.TES.storage_eff.set_value(0.95)
+    m.fs.TES.supply_eff.set_value(0.95)
+    m.fs.TES.dt.set_value(1) # hr
 
     if "USD_2021" not in pyunits._pint_registry:
             pyunits.load_definitions_from_strings(
@@ -109,18 +130,18 @@ def build_flat_plate_flowsheet(
     @m.Constraint(doc="System heat flow")
     def eq_fpc_heat_gen(b):
         return (
-        heat_gen == b.fs.fpc_to_md + b.fs.tes.heat_in[0] + b.fs.curtailment
+        heat_gen == b.fs.fpc_to_md + b.fs.TES.heat_in[0] + b.fs.curtailment
         )
 
     @m.Constraint(doc="MD heat requirment")
     def eq_md_heat_req(b):
-        return (md_heat_req == b.fs.fpc_to_md + b.fs.tes.heat_out[0] + b.fs.grid_to_md
+        return (md_heat_req == b.fs.fpc_to_md + b.fs.TES.heat_out[0] + b.fs.grid_to_md
         )
 
     # Add grid electricity cost
     @m.Expression(doc="grid cost")
     def grid_cost(b):
-        return (heat_price * b.fs.grid_to_md * b.fs.tes.dt)
+        return (heat_price * b.fs.grid_to_md * b.fs.TES.dt)
        
     # Add grid electricity cost
     @m.Constraint(doc="FPC heat generation")
@@ -142,30 +163,22 @@ def fix_dof_and_initialize(
         m: Pyomo `Block` or `ConcreteModel` containing the flowsheet
         outlvl: Logger (default: idaeslog.WARNING)
     """
-    m.fs.tes.initialize(outlvl=outlvl)
+    m.fs.TES.initialize(outlvl=outlvl)
+    m.fs.FPC.initialize(outlvl=outlvl)
 
     return 
 
-def add_stroage(m):
-    m.fs.tes = HeatStorage()
-    m.fs.tes.storage_eff.set_value(0.95)
-    m.fs.tes.supply_eff.set_value(0.95)
-    m.fs.tes.dt.set_value(1) # hr
-
-    return m.fs.tes
-
 if __name__ == "__main__":
     m = build_flat_plate_flowsheet()
-
-    print(f'{value(m.fs.heat_generation):<10,.1f}', pyunits.get_units(m.fs.heat_generation))
     fix_dof_and_initialize(m)
-    print(f'{value(m.fs.heat_generation):<10,.1f}', pyunits.get_units(m.fs.heat_generation))
     results = solver.solve(m)
-    print(f'{value(m.fs.heat_generation):<10,.1f}', pyunits.get_units(m.fs.heat_generation))
 
-    print(f'{"initial state of heat: ":<24s}',  f'{value(m.fs.tes.initial_state_of_charge):<10,.1f}', f'{pyunits.get_units(m.fs.tes.initial_state_of_charge)}')
-    print(f'{"state of heat: ":<24s}',          f'{value(m.fs.tes.state_of_charge[0]):<10,.1f}', f'{pyunits.get_units(m.fs.tes.state_of_charge[0])}')
-    print(f'{"Heat throughput: ":<24s}',        f'{value(m.fs.tes.heat_throughput[0]):<10,.1f}', f'{pyunits.get_units(m.fs.tes.heat_throughput[0])}')
-    print(f'{"TES power: ":<24s}',            f'{value(m.fs.tes.heat_output):<10,.1f}', f'{pyunits.get_units(m.fs.tes.heat_output)}')
-    print(f'{"TES heat: ":<24s}',           f'{value(m.fs.tes.heat_capacity):<10,.1f}', f'{pyunits.get_units(m.fs.tes.heat_capacity)}')
+    print(f'{"FPC Heat Gen: ":<24s}',  f'{value(m.fs.FPC.Q_useful):<10,.1f}', f'{pyunits.get_units(m.fs.FPC.Q_useful)}')
+    
+
+    print(f'{"initial state of heat: ":<24s}',  f'{value(m.fs.TES.initial_state_of_charge):<10,.1f}', f'{pyunits.get_units(m.fs.TES.initial_state_of_charge)}')
+    print(f'{"state of heat: ":<24s}',          f'{value(m.fs.TES.state_of_charge[0]):<10,.1f}', f'{pyunits.get_units(m.fs.TES.state_of_charge[0])}')
+    print(f'{"Heat throughput: ":<24s}',        f'{value(m.fs.TES.heat_throughput[0]):<10,.1f}', f'{pyunits.get_units(m.fs.TES.heat_throughput[0])}')
+    print(f'{"TES power: ":<24s}',            f'{value(m.fs.TES.heat_output):<10,.1f}', f'{pyunits.get_units(m.fs.TES.heat_output)}')
+    print(f'{"TES heat: ":<24s}',           f'{value(m.fs.TES.heat_capacity):<10,.1f}', f'{pyunits.get_units(m.fs.TES.heat_capacity)}')
     print(f'{"Heat generation: ":<24s}',   f'{value(m.fs.heat_generation):<10,.1f}', f'{pyunits.get_units(m.fs.heat_generation)}')

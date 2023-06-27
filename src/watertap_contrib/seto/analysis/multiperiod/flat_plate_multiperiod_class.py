@@ -41,10 +41,10 @@ def get_fpc_md_tes_variable_pairs(t1, t2):
         None
     """
     return [
-        (t1.fs.tes.state_of_charge[0], t2.fs.tes.initial_state_of_charge),
-        (t1.fs.tes.heat_throughput[0], t2.fs.tes.initial_heat_throughput),
-        (t1.fs.tes.heat_output, t2.fs.tes.heat_output),
-        (t1.fs.tes.heat_capacity, t2.fs.tes.heat_capacity),
+        (t1.fs.TES.state_of_charge[0], t2.fs.TES.initial_state_of_charge),
+        (t1.fs.TES.heat_throughput[0], t2.fs.TES.initial_heat_throughput),
+        (t1.fs.TES.heat_output, t2.fs.TES.heat_output),
+        (t1.fs.TES.heat_capacity, t2.fs.TES.heat_capacity),
         ]
 
 def unfix_dof(m):
@@ -57,10 +57,10 @@ def unfix_dof(m):
     Returns:
         None
     """
-    # m.fs.tes.nameplate_energy.unfix()
-    # m.fs.tes.nameplate_energy.fix(3000)
-    m.fs.tes.heat_capacity.unfix()
-    m.fs.tes.heat_output.unfix()
+    # m.fs.TES.nameplate_energy.unfix()
+    # m.fs.TES.nameplate_energy.fix(3000)
+    m.fs.TES.heat_capacity.unfix()
+    m.fs.TES.heat_output.unfix()
 
     return
 
@@ -116,13 +116,13 @@ def create_multiperiod_fpc_md_tes_model(
         # unfix_dof_options=None,
         )
     
-    mp.blocks[0].process.fs.tes.initial_state_of_charge.fix(0)
+    mp.blocks[0].process.fs.TES.initial_state_of_charge.fix(0)
 
     @mp.Expression(doc="Heat storage cost")
     def tes_cost(b):
         return ( 0.168 * # capital recovery factor
-            (cost_tes_power * b.blocks[0].process.fs.tes.heat_output
-            +cost_tes_energy * b.blocks[0].process.fs.tes.heat_capacity))
+            (cost_tes_power * b.blocks[0].process.fs.TES.heat_output
+            +cost_tes_energy * b.blocks[0].process.fs.TES.heat_capacity))
         
     # Add fpc cost function
     @mp.Expression(doc="MD cost")
@@ -160,7 +160,7 @@ def create_plot(mp, idx, norm=False):
     n = 24
     titles = ['Summer','Winter','Spring', 'Fall']
     hour = [i for i in range(1,n+1)]
-    tes_state = np.array([value(mp.blocks[i].process.fs.tes.state_of_charge[0]) for i in range(n)])
+    tes_state = np.array([value(mp.blocks[i].process.fs.TES.state_of_charge[0]) for i in range(n)])
     heat_gen = np.array([value(mp.blocks[i].process.fs.heat_generation) for i in range(n)])
     heat_curtail = np.array([value(mp.blocks[i].process.fs.curtailment) for i in range(n)])
     heat_price = np.array([value(mp.blocks[i].process.fs.heat_price) for i in range(n)])
@@ -187,8 +187,8 @@ def create_plot(mp, idx, norm=False):
     ax3.tick_params(axis="y", labelsize=16)
 
     fpc_to_md = np.array([value(mp.blocks[i].process.fs.fpc_to_md) for i in range(n)])
-    fpc_to_tes = np.array([value(mp.blocks[i].process.fs.tes.heat_in[0]) for i in range(n)])
-    tes_to_md = np.array([value(mp.blocks[i].process.fs.tes.heat_out[0]) for i in range(n)])
+    fpc_to_tes = np.array([value(mp.blocks[i].process.fs.TES.heat_in[0]) for i in range(n)])
+    tes_to_md = np.array([value(mp.blocks[i].process.fs.TES.heat_out[0]) for i in range(n)])
     grid_to_md = np.array([value(mp.blocks[i].process.fs.grid_to_md) for i in range(n)])
     labels=["FPC to MD", "TES to MD", "Grid to MD", "FPC to TES"]
     norm_labels=["FPC to MD", "TES to MD", "FPC to TES", "Grid to MD"]
