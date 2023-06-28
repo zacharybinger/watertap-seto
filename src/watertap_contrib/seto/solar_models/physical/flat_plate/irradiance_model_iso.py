@@ -339,3 +339,6 @@ class IrradianceModelIsoSkyData(SolarEnergyBaseData):
                 * (1 - cos(pyunits.convert(self.beta, to_units=pyunits.rad)))
                 / 2
             )
+
+
+        # TODO: Fix error when hours before sun is up or after sun is down

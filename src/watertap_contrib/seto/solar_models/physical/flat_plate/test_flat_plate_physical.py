@@ -63,7 +63,7 @@ class TestFlatPlatePhysical:
         m.fs.flatplate.pump_eff.set_value(0.85)
         m.fs.flatplate.T_amb.set_value(12)  # default SAM model at noon on Jan. 1
         m.fs.flatplate.T_in.set_value(38.2)  # default SAM model at noon on Jan. 1
-        m.fs.flatplate.G_trans.set_value(540)  # default SAM model at noon on Jan. 1
+        m.fs.flatplate.G_trans.set_value(900)  # default SAM model at noon on Jan. 1
 
         assert degrees_of_freedom(m) == 0
 
@@ -73,7 +73,7 @@ class TestFlatPlatePhysical:
 
         assert pytest.approx(4.00, rel=1e-3) == value(m.fs.flatplate.FprimeUL)
         assert pytest.approx(1.00, rel=1e-3) == value(m.fs.flatplate.r)
-        assert pytest.approx(1616.29, rel=1e-3) == value(
+        assert pytest.approx(3094.61, rel=1e-3) == value(
             m.fs.flatplate.Q_useful
         )  # [W], with no pipe or heat exchanger losses
         assert pytest.approx(52.94, rel=1e-3) == value(m.fs.flatplate.P_pump)  # [W]

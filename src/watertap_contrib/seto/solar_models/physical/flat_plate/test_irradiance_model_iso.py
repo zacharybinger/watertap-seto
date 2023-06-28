@@ -71,6 +71,7 @@ class TestIrradianceModelIsoSky:
 
         assert pytest.approx(-14.04, rel=1e-3) == value(m.fs.isosky.eqn_of_time)
         assert pytest.approx(9.501, rel=1e-3) == value(m.fs.isosky.solar_time)
+        assert pytest.approx(49.31, rel=1e-3) == value(m.fs.isosky.B)
         assert pytest.approx(-37.5, rel=1e-3) == value(m.fs.isosky.omega)
         assert pytest.approx(62.20, rel=1e-3) == value(m.fs.isosky.theta_z)
         assert pytest.approx(-11.58, rel=1e-3) == value(m.fs.isosky.delta)

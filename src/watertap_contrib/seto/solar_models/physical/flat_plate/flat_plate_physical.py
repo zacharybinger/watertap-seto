@@ -65,13 +65,13 @@ class FlatPlatePhysicalData(SolarEnergyBaseData):
         )
 
         self.cp_test = Param(
-            initialize=1,
+            initialize=4184,
             units=pyunits.J / (pyunits.kg * pyunits.C),
             doc="specific heat capacity of fluid during characterization test",
         )
 
         self.cp_use = Param(
-            initialize=1,
+            initialize=4184,
             units=pyunits.J / (pyunits.kg * pyunits.C),
             doc="specific heat capacity of fluid during use",
         )
@@ -88,12 +88,12 @@ class FlatPlatePhysicalData(SolarEnergyBaseData):
             initialize=1, units=pyunits.dimensionless, doc="pump efficiency"
         )
 
-        self.T_amb = Param(initialize=1, units=pyunits.C, doc="ambient temperature")
+        self.T_amb = Param(initialize=30, units=pyunits.C, doc="ambient temperature")
 
-        self.T_in = Param(initialize=1, units=pyunits.C, doc="inlet temperature")
+        self.T_in = Param(initialize=80, units=pyunits.C, doc="inlet temperature")
 
         self.G_trans = Param(
-            initialize=1,
+            initialize=900,
             units=pyunits.W / pyunits.m**2,
             doc="irradiance transmitted through glazing",
         )
