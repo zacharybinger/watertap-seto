@@ -255,4 +255,4 @@ if __name__ == "__main__":
     results = solver.solve(mp)
     create_plot(mp, 0, norm=True)
     fig.tight_layout()
-    plt.show()
+    # plt.show()
