@@ -255,7 +255,7 @@ def create_plot(mp, idx, elec_prices, norm=False):
     df.columns = ["Hour", "PV to RO", "PV to Battery", "Battery to RO", "Grid to RO"]
     features = ["PV to RO", "PV to Battery", "Battery to RO", "Grid to RO"]
     df['Total'] = df["PV to RO"] + df["Battery to RO"] + df["Grid to RO"] + df["PV to Battery"]
-    df.to_csv(absolute_path+'/data_files/sim_results.csv')
+
     if norm == True:
         for feature in features:
             df[feature] = (df[feature]/df['Total'])
