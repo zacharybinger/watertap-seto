@@ -1,4 +1,5 @@
 # General python imports
+import os
 import numpy as np
 import pandas as pd
 import logging
@@ -63,9 +64,7 @@ def unfix_dof(m):
     m.fs.tes.heat_output.unfix()
 
     return
-
-heat_generation = [0,0,0,0,0,0,0,0,10,12,14,18,24,32,24,18,14,12,10,0,0,0,0,0]
-
+ 
 def create_multiperiod_fpc_md_tes_model(
         n_time_points= 24,
         md_capacity = 5, # m3/day
@@ -73,7 +72,7 @@ def create_multiperiod_fpc_md_tes_model(
         cost_tes_power = 75, # $/kW
         cost_tes_energy = 50, # $/kWh      
         heat_price = 0.15,
-        fpc_gen = heat_generation,
+        fpc_gen = None,
         surrogate = None,
         start_date = None
     ):
@@ -176,7 +175,7 @@ def create_plot(mp, idx, norm=False):
     axes[idx].set_ylabel('  Energy (kWh)', loc='center', fontsize=16)
     axes[idx].set_xlabel('Operating Hours', fontsize=16)
     
-    axes[idx].set_title(titles[idx], loc='center', x=-0.09, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
+    axes[idx].set_title(titles[idx], loc='center', x=-0.07, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
     axes[idx].tick_params(axis="x", labelsize=16)
     axes[idx].tick_params(axis="y", labelsize=16)
     ax3 = axes[idx].twinx()
@@ -230,7 +229,7 @@ def create_plot(mp, idx, norm=False):
         axes2[idx].yaxis.set_major_formatter(mtick.PercentFormatter()) 
         axes2[idx].vlines(x=[day*24 for day in range(7)],ymin=0,ymax=100,linestyle='--',color='black')
     axes2[idx].set_xlim([1,n])
-    axes2[idx].set_title(titles[idx], loc='center', x=-0.08, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
+    axes2[idx].set_title(titles[idx], loc='center', x=-0.07, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
     axes2[idx].tick_params(axis="x", labelsize=16)
     axes2[idx].tick_params(axis="y", labelsize=16)
     # ax4 = axes2[idx].twinx()
@@ -242,10 +241,20 @@ def create_plot(mp, idx, norm=False):
     # ax4.tick_params(axis="y", labelsize=16)
 
 if __name__ == "__main__":
-    fig,  axes= plt.subplots(2, figsize=(20,10))
-    fig2,  axes2= plt.subplots(4, figsize=(20,10))
-    mp = create_multiperiod_fpc_md_tes_model()
-    results = solver.solve(mp)
-    create_plot(mp, 0, norm=True)
-    fig.tight_layout()
+    absolute_path = os.path.dirname(__file__)
+    parent_dir = os.path.abspath(os.path.join(absolute_path, os.pardir))
+    seto_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+
+    heat_gen = pd.read_excel('/Users/zbinger/FPC_heat_gen.xlsx')
+    fig,  axes= plt.subplots(4, figsize=(19,10))
+    fig2,  axes2= plt.subplots(4, figsize=(19,10))
+    for idx, period in enumerate(['Summer','Winter','Spring', 'Fall']):
+        mp = create_multiperiod_fpc_md_tes_model(fpc_gen=heat_gen[period]*10)
+        results = solver.solve(mp)
+        create_plot(mp, idx, norm=True)
+        fig.tight_layout()
+        fig2.tight_layout()
+
+    fig.savefig(absolute_path+'/plots/week_surrogate_tes_state.png', dpi=900)
+    fig2.savefig(absolute_path+'/plots/week_surrogate_heat_load.png', dpi=900)
     plt.show()
