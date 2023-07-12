@@ -299,7 +299,7 @@ if __name__ == "__main__":
         elec_prices = ([get_elec_tier(key_days[idx]+datetime.timedelta(days=t//24), t%24) for t in range(7*24)])
         mp = create_multiperiod_pv_battery_model(surrogate = surr, start_date = key_days[idx])
         results = solver.solve(mp)
-        create_plot(mp, idx, elec_prices, norm=False)
+        create_plot(mp, idx, elec_prices, norm=True)
         fig.tight_layout()
         fig2.tight_layout()
         print('pv size: ', value(mp.blocks[0].process.fs.pv_size))
@@ -307,6 +307,6 @@ if __name__ == "__main__":
         print('battery energy: ', value(mp.blocks[0].process.fs.battery.nameplate_energy))
         print('total cost: ', value(mp.LCOW))
 
-    # fig.savefig(absolute_path+'/plots/week_surrogate_battery_state.png', dpi=900)
-    # fig2.savefig(absolute_path+'/plots/week_surrogate_load2.png', dpi=900)
+    fig.savefig(absolute_path+'/plots/week_surrogate_battery_state.png', dpi=900)
+    fig2.savefig(absolute_path+'/plots/week_surrogate_load2.png', dpi=900)
     plt.show()
