@@ -68,7 +68,7 @@ def unfix_dof(m):
 def create_multiperiod_fpc_md_tes_model(
         n_time_points= 7*24,
         md_capacity = 5, # m3/day
-        md_heat_req = 18, # kW
+        md_heat_req = 20, # kW
         cost_tes_power = 75, # $/kW
         cost_tes_energy = 50, # $/kWh      
         heat_price = 0.15,
@@ -216,7 +216,8 @@ def create_plot(mp, idx, norm=True):
         axes2[idx].set_ylabel('Heat Load %', loc='center', fontsize=16)
     else:
         axes2[idx].stackplot(hour, df["FPC to MD"],  df["TES to MD"], df["Grid to MD"], baseline='zero', colors=['#1f77b4','#ff7f0e','#d62728'], labels=labels, alpha=1, ec='white')
-        axes2[idx].plot(hour, df["FPC to TES"], label="FPC to TES", color='#f78d02')
+        axes2[idx].plot(hour, df["FPC to TES"], label="FPC to TES", color='#2ca02c', linewidth=2)
+        axes2[idx].fill_between(hour, df["FPC to TES"], color='#2ca02c', hatch='////', edgecolor="#515251", linewidth=2, alpha=0.25)
         axes2[idx].set_ylabel('  Power (kW)', loc='center', fontsize=16)
     # df.to_csv('/Users/zbinger/watertap-seto/src/watertap_contrib/seto/analysis/multiperiod/data_files/sim_results_norm.csv')
     # ax2.set_xlabel('Hour (June 18th)')
@@ -229,6 +230,7 @@ def create_plot(mp, idx, norm=True):
         axes2[idx].yaxis.set_major_formatter(mtick.PercentFormatter()) 
         axes2[idx].vlines(x=[day*24 for day in range(7)],ymin=0,ymax=100,linestyle='--',color='black')
     axes2[idx].set_xlim([1,n])
+    axes2[idx].set_ylim([0,20])
     axes2[idx].set_title(titles[idx], loc='center', x=-0.07, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
     axes2[idx].tick_params(axis="x", labelsize=16)
     axes2[idx].tick_params(axis="y", labelsize=16)
@@ -255,6 +257,6 @@ if __name__ == "__main__":
         fig.tight_layout()
         fig2.tight_layout()
 
-    # fig.savefig(absolute_path+'/plots/week_surrogate_tes_state.png', dpi=900)
-    # fig2.savefig(absolute_path+'/plots/week_surrogate_heat_load.png', dpi=900)
+    fig.savefig(absolute_path+'/plots/week_surrogate_tes_state_week.png', dpi=900)
+    fig2.savefig(absolute_path+'/plots/week_surrogate_heat_load_week.png', dpi=900)
     plt.show()
