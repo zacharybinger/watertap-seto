@@ -66,7 +66,7 @@ def unfix_dof(m):
     return
  
 def create_multiperiod_fpc_md_tes_model(
-        n_time_points= 24,
+        n_time_points= 7*24,
         md_capacity = 5, # m3/day
         md_heat_req = 18, # kW
         cost_tes_power = 75, # $/kW
@@ -152,11 +152,11 @@ def create_multiperiod_fpc_md_tes_model(
 
     return mp
 
-def create_plot(mp, idx, norm=False):
+def create_plot(mp, idx, norm=True):
     # Create diagrams
     # plt.clf()
     colors=['#235789', '#4A7C59', '#F1A208']
-    n = 24
+    n = 7*24
     titles = ['Summer','Winter','Spring', 'Fall']
     hour = [i for i in range(1,n+1)]
     tes_state = np.array([value(mp.blocks[i].process.fs.tes.state_of_charge[0]) for i in range(n)])
@@ -249,12 +249,12 @@ if __name__ == "__main__":
     fig,  axes= plt.subplots(4, figsize=(19,10))
     fig2,  axes2= plt.subplots(4, figsize=(19,10))
     for idx, period in enumerate(['Summer','Winter','Spring', 'Fall']):
-        mp = create_multiperiod_fpc_md_tes_model(fpc_gen=heat_gen[period]*10)
+        mp = create_multiperiod_fpc_md_tes_model(fpc_gen=heat_gen[period]*5)
         results = solver.solve(mp)
-        create_plot(mp, idx, norm=True)
+        create_plot(mp, idx, norm=False)
         fig.tight_layout()
         fig2.tight_layout()
 
-    fig.savefig(absolute_path+'/plots/week_surrogate_tes_state.png', dpi=900)
-    fig2.savefig(absolute_path+'/plots/week_surrogate_heat_load.png', dpi=900)
+    # fig.savefig(absolute_path+'/plots/week_surrogate_tes_state.png', dpi=900)
+    # fig2.savefig(absolute_path+'/plots/week_surrogate_heat_load.png', dpi=900)
     plt.show()
