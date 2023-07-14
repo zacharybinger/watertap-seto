@@ -111,10 +111,11 @@ def get_elec_tier(day, time):
 def create_multiperiod_pv_battery_model(
         n_time_points= 7*24,
         ro_capacity = 6000, # m3/day
-        ro_elec_req = 944.3, # kW
+        ro_elec_req = 1000, # kW
         cost_battery_power = 75, # $/kW
         cost_battery_energy = 50, # $/kWh      
         elec_price = 0.15,
+        pv_oversize = 1,
         surrogate = None,
         start_date = None
     ):
@@ -141,11 +142,12 @@ def create_multiperiod_pv_battery_model(
         surrogate = load_surrogate(surrogate_filename=parent_dir+'/net_metering/pysam_data/pv_Spring_Eq_surrogate_week.json')
         
     flowsheet_options={ t: { 
-                            "pv_gen": max(0,eval_surrogate(surrogate, ro_elec_req, t%24, t//24)),
+                            "pv_gen": max(0,eval_surrogate(surrogate, pv_oversize*ro_elec_req, t%24, t//24)),
                             # "elec_price": elec_price[t],
                             "electricity_price": get_elec_tier(start_date+datetime.timedelta(days=t//24), t%24),
                             "ro_capacity": ro_capacity, 
-                            "ro_elec_req": ro_elec_req} 
+                            "ro_elec_req": ro_elec_req,
+                            "pv_oversize": pv_oversize} 
                             for t in range(n_time_points)
     }
 
@@ -231,7 +233,7 @@ def create_plot(mp, idx, elec_prices, norm=False):
     axes[idx].set_xlim([1,n])
     axes[idx].set_ylabel('  Energy (kWh)', loc='center', fontsize=16)
     axes[idx].set_xlabel('Operating Hours', fontsize=16)
-    leg1 = axes[idx].legend(loc="lower left", frameon = False, bbox_to_anchor=(0, 1.0, 0.5, 1), ncols=4, mode="expand", borderaxespad=0.)
+    leg1 = axes[idx].legend(loc="lower left", frameon = False, bbox_to_anchor=(0, 1.0, 0.8, 1), ncols=4, mode="expand", fontsize=14, borderaxespad=0.)
     axes[idx].set_title(titles[idx], loc='center', x=-0.07, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
     axes[idx].tick_params(axis="x", labelsize=16)
     axes[idx].tick_params(axis="y", labelsize=16)
@@ -239,7 +241,7 @@ def create_plot(mp, idx, elec_prices, norm=False):
     ax3.plot(hour, elec_prices,'--',label='Grid Price')
     ax3.set_ylabel('Grid Price ($/kWh)', ha='center', va='center', fontsize=16, labelpad=20)
     ax3.set_ylim([0,0.3])
-    leg2 = ax3.legend(loc="lower left", frameon = False, bbox_to_anchor=(0.52, 1.0, 0.15, 1), ncols=1, mode="expand", borderaxespad=0.)
+    leg2 = ax3.legend(loc="lower left", frameon = False, bbox_to_anchor=(0.82, 1.0, 0.15, 1), ncols=1, mode="expand", fontsize=14, borderaxespad=0.)
     ax3.tick_params(axis="y", labelsize=16)
 
     labels=["PV to RO", "Battery to RO", "Grid to RO", "PV to Battery"]
@@ -264,10 +266,11 @@ def create_plot(mp, idx, elec_prices, norm=False):
     else:
         axes2[idx].stackplot(hour, df["PV to RO"],  df["Battery to RO"], df["Grid to RO"], baseline='zero', colors=['#1f77b4','#ff7f0e','#d62728'], labels=labels, alpha=1, ec='white')
         axes2[idx].plot(hour, df["PV to Battery"], label="PV to Battery", color='#2ca02c', linewidth=2)
+        axes2[idx].fill_between(hour, df["PV to Battery"], color='#2ca02c', hatch='////', edgecolor="#515251", linewidth=2, alpha=0.25)
         axes2[idx].set_ylabel('  Power (kW)', loc='center', fontsize=16)
 
     axes2[idx].set_xlabel('Operation Hours', fontsize=16)
-    leg3 = axes2[idx].legend(loc="lower left", frameon = False, bbox_to_anchor=(0, 1.0, 0.35, 1), ncols=4, mode="expand", borderaxespad=0.)
+    leg3 = axes2[idx].legend(loc="lower left", frameon = False, bbox_to_anchor=(0, 1.0, 0.65, 1), ncols=4, mode="expand", fontsize=14, borderaxespad=0.)
     if norm == True:
         axes2[idx].set_ylim([0,100])
         axes2[idx].yaxis.set_major_formatter(mtick.PercentFormatter()) 
@@ -280,8 +283,8 @@ def create_plot(mp, idx, elec_prices, norm=False):
     ax4.plot(hour, elec_prices,linestyle='dotted', color='k',label='Grid Price')
     ax4.set_ylabel('Grid Price ($/kWh)', ha='center', va='center', fontsize=16, labelpad=20)
     ax4.set_ylim([0,0.3])
-    leg4 = ax4.legend(loc="lower left", frameon = False, bbox_to_anchor=(0.37, 1.0, 0.15, 1),
-        ncols=1, mode="expand", borderaxespad=0.)
+    leg4 = ax4.legend(loc="lower left", frameon = False, bbox_to_anchor=(0.67, 1.0, 0.15, 1),
+        ncols=1, mode="expand", fontsize=14, borderaxespad=0.)
     ax4.tick_params(axis="y", labelsize=16)
 
     
@@ -297,9 +300,9 @@ if __name__ == "__main__":
     for idx, period in enumerate(['Summer Solstice','Winter Solstice','Spring Eq', 'Fall Eq']):
         surr = load_surrogate(surrogate_filename=join(parent_dir+'/net_metering/pysam_data/', "pv_"+period.replace(" ","_")+"_surrogate_week.json"))
         elec_prices = ([get_elec_tier(key_days[idx]+datetime.timedelta(days=t//24), t%24) for t in range(7*24)])
-        mp = create_multiperiod_pv_battery_model(surrogate = surr, start_date = key_days[idx])
+        mp = create_multiperiod_pv_battery_model(surrogate = surr, start_date = key_days[idx], pv_oversize = 1)
         results = solver.solve(mp)
-        create_plot(mp, idx, elec_prices, norm=True)
+        create_plot(mp, idx, elec_prices, norm=False)
         fig.tight_layout()
         fig2.tight_layout()
         print('pv size: ', value(mp.blocks[0].process.fs.pv_size))
@@ -307,6 +310,6 @@ if __name__ == "__main__":
         print('battery energy: ', value(mp.blocks[0].process.fs.battery.nameplate_energy))
         print('total cost: ', value(mp.LCOW))
 
-    fig.savefig(absolute_path+'/plots/week_surrogate_battery_state.png', dpi=900)
-    fig2.savefig(absolute_path+'/plots/week_surrogate_load2.png', dpi=900)
+    # fig.savefig(absolute_path+'/plots/week_surrogate_battery_state.png', dpi=900)
+    # fig2.savefig(absolute_path+'/plots/week_surrogate_load.png', dpi=900)
     plt.show()

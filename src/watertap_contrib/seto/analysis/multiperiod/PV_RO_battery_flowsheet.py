@@ -63,7 +63,8 @@ def build_pv_battery_flowsheet(m = None,
                                pv_gen = 1000,
                                electricity_price = 0.1,
                                ro_capacity = 6000,
-                               ro_elec_req = 944.3):
+                               ro_elec_req = 944.3,
+                               pv_oversize = 1):
     """Builds the structure of the PV-RO-battery system
 
     Returns:
@@ -75,7 +76,7 @@ def build_pv_battery_flowsheet(m = None,
     # m.fs.pv = PVdummy()
     # m.fs.pv.elec_generation.fix(pv_gen)
     # m.fs.pv.size.fix(ro_elec_req)
-    m.fs.pv_size = ro_elec_req
+    m.fs.pv_size = pv_oversize*ro_elec_req
     battery = add_battery(m)
 
     if "USD_2021" not in pyunits._pint_registry:
