@@ -266,7 +266,7 @@ def create_plot(mp, idx, elec_prices, norm=False):
     else:
         axes2[idx].stackplot(hour, df["PV to RO"],  df["Battery to RO"], df["Grid to RO"], baseline='zero', colors=['#1f77b4','#ff7f0e','#d62728'], labels=labels, alpha=1, ec='white')
         axes2[idx].plot(hour, df["PV to Battery"], label="PV to Battery", color='#2ca02c', linewidth=2)
-        axes2[idx].fill_between(hour, df["PV to Battery"], color='#2ca02c', hatch='////', edgecolor="#515251", linewidth=2, alpha=0.25)
+        axes2[idx].fill_between(hour, df["PV to Battery"], color='#2ca02c', hatch='////', edgecolor="#515251", linewidth=2, alpha=0.5)
         axes2[idx].set_ylabel('  Power (kW)', loc='center', fontsize=16)
 
     axes2[idx].set_xlabel('Operation Hours', fontsize=16)
@@ -310,6 +310,6 @@ if __name__ == "__main__":
         print('battery energy: ', value(mp.blocks[0].process.fs.battery.nameplate_energy))
         print('total cost: ', value(mp.LCOW))
 
-    fig.savefig(absolute_path+'/plots/week_surrogate_battery_state_oversize.png', dpi=900)
-    fig2.savefig(absolute_path+'/plots/week_surrogate_load_oversize.png', dpi=900)
-    # plt.show()
+    fig.savefig(absolute_path+'/plots/week_surrogate_battery_state_overload.png', dpi=900)
+    fig2.savefig(absolute_path+'/plots/week_surrogate_load_overload.png', dpi=900)
+    plt.show()
