@@ -7,7 +7,7 @@ from watertap_contrib.seto.costing.util import (
 )
 
 
-def build_photovoltaic_cost_param_block(blk):
+def build_pv_surrogate_cost_param_block(blk):
 
     costing = blk.parent_block()
 
@@ -78,12 +78,12 @@ def build_photovoltaic_cost_param_block(blk):
 
 
 @register_costing_parameter_block(
-    build_rule=build_photovoltaic_cost_param_block, parameter_block_name="photovoltaic"
+    build_rule=build_pv_surrogate_cost_param_block, parameter_block_name="pv_surrogate"
 )
-def cost_pv(blk):
+def cost_pv_surrogate(blk):
 
     global_params = blk.costing_package
-    pv_params = blk.costing_package.photovoltaic
+    pv_params = blk.costing_package.pv_surrogate
     make_capital_cost_var(blk)
     make_variable_operating_cost_var(blk)
     make_fixed_operating_cost_var(blk)
@@ -100,6 +100,13 @@ def cost_pv(blk):
         units=blk.config.flowsheet_costing_block.base_currency,
         bounds=(0, None),
         doc="Indirect costs of PV system",
+    )
+    
+    blk.land_cost = pyo.Var(
+        initialize=0,
+        units=blk.config.flowsheet_costing_block.base_currency,
+        bounds=(0, None),
+        doc="Land costs of PV system",
     )
 
     blk.sales_tax = pyo.Var(
@@ -154,6 +161,11 @@ def cost_pv(blk):
         == (blk.system_capacity * pv_params.cost_per_watt_indirect)
         + (blk.land_area * pv_params.land_cost_per_acre)
     )
+    
+    blk.land_cost_constraint = pyo.Constraint(
+        expr=blk.land_cost
+        == (blk.land_area * pv_params.land_cost_per_acre)
+    )
 
     blk.sales_tax_constraint = pyo.Constraint(
         expr=blk.sales_tax == blk.direct_cost * global_params.sales_tax_frac
@@ -173,7 +185,5 @@ def cost_pv(blk):
         expr=blk.variable_operating_cost
         == pv_params.variable_operating_by_generation * blk.annual_generation
     )
-    # print(f'\n{"=======> End of PV Costing Block <=======":^60}\n')
-    print(blk.annual_generation())
+
     blk.costing_package.cost_flow(blk.unit_model.electricity, "electricity")
-    # blk.display()

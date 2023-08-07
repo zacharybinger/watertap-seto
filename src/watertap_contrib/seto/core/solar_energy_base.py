@@ -72,14 +72,14 @@ class SolarEnergyBaseData(UnitModelBlockData):
         self._scaling = None
 
         self.electricity = Var(
-            initialize=1e3,
+            initialize=0,
             units=pyunits.kW,
             bounds=(None, None),
             doc="Electricity production of solar process",
         )
 
         self.heat = Var(
-            initialize=1e3,
+            initialize=0,
             units=pyunits.kW,
             bounds=(None, None),
             doc="Heat production of solar process",
@@ -89,9 +89,12 @@ class SolarEnergyBaseData(UnitModelBlockData):
         self, state_args=None, outlvl=idaeslog.NOTSET, solver=None, optarg=None
     ):
         """
-        Placeholder, should be overloaded
+        Defaults to fixing all Vars on solar energy unit model, should be overloaded
         by derived classes as necessary.
         """
+
+        self.electricity.fix()
+        self.heat.fix()
 
         if solver is None:
             solver = get_solver()
@@ -101,7 +104,10 @@ class SolarEnergyBaseData(UnitModelBlockData):
             if dof != 0:
                 raise InitializationError(
                     f"\nWhile initializing {self.name}, the degrees of freedom "
-                    "are {dof}, when zero is required. \n"
+                    "are {dof}, when zero is required. \nThe default initialization "
+                    "approach for SolarEnergyBase class is to fix the electricity "
+                    "and heat Vars.If there are additional Vars on the solar energy "
+                    "model, they should be handled with a custom initialization routine."
                 )
 
     def calculate_scaling_factors(self):
