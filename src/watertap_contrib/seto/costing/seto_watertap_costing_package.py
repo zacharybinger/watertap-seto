@@ -42,16 +42,16 @@ from watertap_contrib.seto.solar_models.zero_order import Photovoltaic
 from watertap_contrib.seto.costing.solar.photovoltaic import cost_pv
 from watertap_contrib.seto.solar_models.surrogate.pv import PVSurrogate
 from watertap_contrib.seto.costing.solar.pv_surrogate import cost_pv_surrogate
-from watertap_contrib.seto.unit_models.surrogate import LTMEDSurrogate
-from watertap_contrib.seto.unit_models.surrogate import MEDTVCSurrogate
-from watertap_contrib.seto.costing.units.lt_med_surrogate import cost_lt_med_surrogate
-from watertap_contrib.seto.costing.units.med_tvc_surrogate import cost_med_tvc_surrogate
-from watertap_contrib.seto.unit_models.zero_order.chemical_softening_zo import (
-    ChemicalSofteningZO,
-)
-from watertap_contrib.seto.costing.units.chemical_softening_zo import (
-    cost_chem_softening,
-)
+# from watertap_contrib.seto.unit_models.surrogate import LTMEDSurrogate
+# from watertap_contrib.seto.unit_models.surrogate import MEDTVCSurrogate
+# from watertap_contrib.seto.costing.units.lt_med_surrogate import cost_lt_med_surrogate
+# from watertap_contrib.seto.costing.units.med_tvc_surrogate import cost_med_tvc_surrogate
+# from watertap_contrib.seto.unit_models.zero_order.chemical_softening_zo import (
+#     ChemicalSofteningZO,
+# )
+# from watertap_contrib.seto.costing.units.chemical_softening_zo import (
+#     cost_chem_softening,
+# )
 
 from watertap_contrib.seto.core import PySAMWaterTAP
 
@@ -60,7 +60,7 @@ from watertap_contrib.seto.core import PySAMWaterTAP
 class SETOWaterTAPCostingData(WaterTAPCostingData):
 
     unit_mapping = {
-        LTMEDSurrogate: cost_lt_med_surrogate,
+        # LTMEDSurrogate: cost_lt_med_surrogate,
         Photovoltaic: cost_pv,
         PVSurrogate: cost_pv_surrogate,
         Mixer: cost_mixer,
@@ -77,7 +77,7 @@ class SETOWaterTAPCostingData(WaterTAPCostingData):
         Electrodialysis1D: cost_electrodialysis,
         IonExchange0D: cost_ion_exchange,
         GAC: cost_gac,
-        ChemicalSofteningZO: cost_chem_softening,
+        # ChemicalSofteningZO: cost_chem_softening,
     }
 
     def build_global_params(self):
