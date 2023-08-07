@@ -262,7 +262,20 @@ def optimize_setup(
     min_flux_mass_phase_comp = 1.0e-5,
     min_eq_mass_frac_permeate = 1e-6
 ):
-    
+    """_summary_
+
+    Args:
+        m (_type_): _description_
+        opt_target (_type_): _description_
+        press_lb (int, optional): _description_. Defaults to 10.
+        press_ub (int, optional): _description_. Defaults to 1500.
+        area_lb (int, optional): _description_. Defaults to 1.
+        area_ub (int, optional): _description_. Defaults to 6000000.
+        prod_salinity (float, optional): _description_. Defaults to 0.5.
+        min_flux (_type_, optional): _description_. Defaults to 1.0e-5.
+        min_flux_mass_phase_comp (_type_, optional): _description_. Defaults to 1.0e-5.
+        min_eq_mass_frac_permeate (_type_, optional): _description_. Defaults to 1e-6.
+    """
     print(f'\n{"=======> OPTIMIZING <=======":^60}\n')
 
     m.fs.obj = Objective(expr=opt_target)
@@ -322,13 +335,13 @@ def add_costing(m, cap_max = None, elec_sell_price=None):
     )
     treatment.costing.cost_process()
         
-    # m.fs.energy.pv_design_constraint = Constraint(
-    #     expr=m.fs.energy.pv.design_size == m.fs.treatment.costing.aggregate_flow_electricity
-    # )
-
-    m.fs.energy.pv_electricity_constraint = Constraint(
-        expr=m.fs.energy.pv.electricity <= 0
+    m.fs.energy.pv_design_constraint = Constraint(
+        expr=m.fs.energy.pv.design_size == m.fs.treatment.costing.aggregate_flow_electricity
     )
+
+    # m.fs.energy.pv_electricity_constraint = Constraint(
+    #     expr=m.fs.energy.pv.electricity <= 0
+    # )
     
     m.fs.energy.pv.costing.land_constraint = Constraint(
         expr=m.fs.energy.pv.costing.land_area == m.fs.energy.pv.land_req
@@ -346,8 +359,6 @@ def add_costing(m, cap_max = None, elec_sell_price=None):
         m.fs.sys_costing.total_capital_cost.setlb(0)
         m.fs.sys_costing.total_capital_cost.setub(cap_max)
     
-    if elec_sell_price != None:
-        m.fs.energy.costing.electricity_sell_cost = elec_sell_price
 
     
     treatment.costing.initialize()
@@ -403,6 +414,43 @@ def debug(m, solver=None, automate_rescale=False, resolve=False):
         debug(m)
         return results
 
+def generate_costing_report(m, filepath = None):
+    costing_data = {"Attribute":'Value'}
+    for v in m.fs.energy.pv.costing.component_data_objects(Var, descend_into=True):
+        costing_data[str(v)] = value(v)
+    for v in m.fs.energy.costing.component_data_objects(Var, descend_into=True):
+        costing_data[str(v)] = value(v)
+    for v in m.fs.treatment.costing.component_data_objects(Var, descend_into=True):
+        costing_data[str(v)] = value(v)
+    for v in m.fs.sys_costing.component_data_objects(Var, descend_into=True):
+        costing_data[str(v)] = value(v)
+
+    if filepath != None:
+        with open(filepath, 'w') as f:
+            for key in costing_data.keys():
+                f.write("%s,%s\n"%(key,costing_data[key]))
+
+    return costing_data
+
+def extract_values(block):
+    costing_data = dict.fromkeys(['key_0','key_1','key_2','key_3'], None)
+    for v in block.component_data_objects(Var, descend_into=False):
+        keys = str(v).split('.')
+        for idx, key in enumerate(keys[:-1]):
+            costing_data['key_'+str(idx)] = key
+        costing_data[keys[-1]] = value(v)
+    return costing_data
+
+def generate_detailed_costing_report(m, level, filepath = None):
+    dict_track = []
+    if level == 'Process':
+        cost_blocks = [m.fs.energy.costing, m.fs.treatment.costing, m.fs.sys_costing]
+    else:
+        cost_blocks = [m.fs.energy.pv.costing, m.fs.energy.costing.pv_surrogate]
+    for block in cost_blocks:
+        dict_track.append(extract_values(block))
+    return dict_track
+
 
 def solve(m, solver=None, tee=False, check_termination=True):
     if solver is None:
@@ -426,7 +474,7 @@ def model_setup(Q, conc, recovery):
     m = build_ro_pv()
     set_operating_conditions(m, flow_in=Q, conc_in=conc, water_recovery=recovery)
     initialize_sys(m, water_recovery=recovery)
-    add_costing(m, cap_max = 9.0E6, elec_sell_price=0)
+    add_costing(m)
     fix_treatment_global_params(m)
     optimize_setup(m, m.fs.sys_costing.LCOW)
     return m
@@ -443,6 +491,7 @@ def mgd_to_m3s(Q):
 def main():
     m = model_setup(mgd_to_m3s(1), 30, 0.5)
     m, results = run(m)
+    costing_data = generate_detailed_costing_report(m, 'Process')
 
     return m, results
 
