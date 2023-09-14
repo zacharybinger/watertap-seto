@@ -72,7 +72,8 @@ def unfix_dof(m):
         None
     """
     # m.fs.battery.nameplate_energy.unfix()
-    # m.fs.battery.nameplate_energy.fix(3000)
+    # m.fs.battery.nameplate_energy.fix(8000)
+    # m.fs.battery.nameplate_power.fix(400)
     m.fs.battery.nameplate_energy.unfix()
     m.fs.battery.nameplate_power.unfix()
     # m.fs.battery.initial_state_of_charge.unfix()
@@ -87,7 +88,8 @@ def get_rep_weeks():
     win_solstice = datetime.datetime(year=2020, month=12, day=21, hour=0, minute=0)
     ver_eq = datetime.datetime(year=2020, month=3, day=20, hour=0, minute=0)
     aut_eq = datetime.datetime(year=2020, month=9, day=22, hour=0, minute=0)
-    key_days = [sum_solstice, win_solstice, ver_eq, aut_eq]
+    # key_days = [sum_solstice, win_solstice, ver_eq, aut_eq]
+    key_days = [ver_eq, sum_solstice, aut_eq, win_solstice]
     return [(x-year_start).days*24 for x in key_days], key_days
 
 def get_elec_tier(day, time):
@@ -112,12 +114,12 @@ def create_multiperiod_pv_battery_model(
         n_time_points= 7*24,
         ro_capacity = 6000, # m3/day
         ro_elec_req = 1000, # kW
-        cost_battery_power = 75, # $/kW
-        cost_battery_energy = 50, # $/kWh      
+        cost_battery_power = 233, # $/kW
+        cost_battery_energy = 282, # $/kWh      
         elec_price = 0.15,
         pv_oversize = 1,
         surrogate = None,
-        start_date = None
+        start_date = None,
     ):
     
     """
@@ -147,7 +149,7 @@ def create_multiperiod_pv_battery_model(
                             "electricity_price": get_elec_tier(start_date+datetime.timedelta(days=t//24), t%24),
                             "ro_capacity": ro_capacity, 
                             "ro_elec_req": ro_elec_req,
-                            "pv_oversize": pv_oversize} 
+                            "pv_oversize": pv_oversize,} 
                             for t in range(n_time_points)
     }
 
@@ -174,24 +176,30 @@ def create_multiperiod_pv_battery_model(
         # mp.blocks[day*24-1].process.fs.battery.initial_state_of_charge.fix(1*mp.blocks[0].process.fs.battery.nameplate_energy)
     # Add battery cost function
     @mp.Expression(doc="battery cost")
-    def battery_cost(b):
-        return ( 0.168 * # capital recovery factor
-            (cost_battery_power * b.blocks[0].process.fs.battery.nameplate_power
-            +cost_battery_energy * b.blocks[0].process.fs.battery.nameplate_energy))
+    def battery_capital_cost(b):
+        return ((cost_battery_power * b.blocks[0].process.fs.battery.nameplate_power +
+                 cost_battery_energy * b.blocks[0].process.fs.battery.nameplate_energy))
         
     # Add PV cost function
     @mp.Expression(doc="PV cost")
-    def pv_cost(b):
-        return (
-            1040 * b.blocks[0].process.fs.pv_size * 0.168 # Annualized CAPEX
-            + 9 * b.blocks[0].process.fs.pv_size)          # OPEX
+    def pv_capital_cost(b):
+        return (0.37 * 1000 * b.blocks[0].process.fs.pv_size +
+                0.03 * 1000 * b.blocks[0].process.fs.pv_size)
+
+    @mp.Expression(doc="Capital cost")
+    def total_capital_cost(b):
+        return (b.battery_capital_cost + b.pv_capital_cost)
+    
+    @mp.Expression(doc="Annualized Capital cost")
+    def annualized_capital_cost(b):
+        return (b.total_capital_cost / 20)
 
     # Total cost
     @mp.Expression(doc='total cost')
     def total_cost(b):
         # The annualized capital cost is evenly distributed to the multiperiod
         return (
-            (b.battery_cost + b.pv_cost) / 365 / 24 * n_time_points
+            (b.annualized_capital_cost) / 365 / 24 * n_time_points
             + sum([b.blocks[i].process.grid_cost for i in range(n_time_points)])
         )
 
@@ -200,7 +208,7 @@ def create_multiperiod_pv_battery_model(
     def LCOW(b):
         # LCOW from RO: 0.45
         return (
-            b.total_cost / ro_capacity / 24 * n_time_points + 0.45
+            0.40 + b.total_cost / (n_time_points*pyunits.convert(ro_capacity * pyunits.m**3 / pyunits.day, to_units=pyunits.m**3 / pyunits.hour))
         )   
 
     # Set objective
@@ -210,15 +218,22 @@ def create_multiperiod_pv_battery_model(
 
 def create_plot(mp, idx, elec_prices, norm=False):
     colors=['#235789', '#4A7C59', '#F1A208']
+    color1 = '#3971ad'
+    color2 = '#c07432'
+    color3 = '#8c8b8b'
     n = 7*24
     titles = ['Summer','Winter','Spring', 'Fall']
+    titles = ['Spring', 'Summer','Fall','Winter']
     hour = [i for i in range(1,n+1)]
     battery_state = np.array([value(mp.blocks[i].process.fs.battery.state_of_charge[0]) for i in range(n)])
     pv_gen = np.array([value(mp.blocks[i].process.fs.elec_generation) for i in range(n)])
     pv_curtail = np.array([value(mp.blocks[i].process.fs.curtailment) for i in range(n)])
     electric_price = np.array([value(mp.blocks[i].process.fs.elec_price) for i in range(n)])
     ro_demand = np.array([value(mp.blocks[i].process.fs.elec_price) for i in range(n)])
-
+    grid_cost = ([value(mp.blocks[i].process.grid_cost)/
+            value(pyunits.convert(6000 * pyunits.m**3 / pyunits.day, to_units=pyunits.m**3 / pyunits.hour)) for i in range(7*24) ])
+    lcow = ([0.4+((value(mp.annualized_capital_cost) /365 / 24) + value(mp.blocks[i].process.grid_cost)) /
+            value(pyunits.convert(6000 * pyunits.m**3 / pyunits.day, to_units=pyunits.m**3 / pyunits.hour)) for i in range(7*24)])
     pv_to_ro = np.array([value(mp.blocks[i].process.fs.pv_to_ro) for i in range(n)])
     pv_to_battery = np.array([value(mp.blocks[i].process.fs.battery.elec_in[0]) for i in range(n)])
     battery_to_ro = np.array([value(mp.blocks[i].process.fs.battery.elec_out[0]) for i in range(n)])
@@ -234,7 +249,7 @@ def create_plot(mp, idx, elec_prices, norm=False):
     axes[idx].set_ylabel('  Energy (kWh)', loc='center', fontsize=16)
     axes[idx].set_xlabel('Operating Hours', fontsize=16)
     leg1 = axes[idx].legend(loc="lower left", frameon = False, bbox_to_anchor=(0, 1.0, 0.8, 1), ncols=4, mode="expand", fontsize=14, borderaxespad=0.)
-    axes[idx].set_title(titles[idx], loc='center', x=-0.07, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
+    axes[idx].set_title(titles[idx], loc='center', x=-0.08, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
     axes[idx].tick_params(axis="x", labelsize=16)
     axes[idx].tick_params(axis="y", labelsize=16)
     ax3 = axes[idx].twinx()
@@ -269,24 +284,58 @@ def create_plot(mp, idx, elec_prices, norm=False):
         axes2[idx].fill_between(hour, df["PV to Battery"], color='#2ca02c', hatch='////', edgecolor="#515251", linewidth=2, alpha=0.5)
         axes2[idx].set_ylabel('  Power (kW)', loc='center', fontsize=16)
 
-    axes2[idx].set_xlabel('Operation Hours', fontsize=16)
+    if idx == 3:
+        axes2[idx].set_xlabel('Operation Hours', fontsize=16)
+
     leg3 = axes2[idx].legend(loc="lower left", frameon = False, bbox_to_anchor=(0, 1.0, 0.65, 1), ncols=4, mode="expand", fontsize=14, borderaxespad=0.)
     if norm == True:
         axes2[idx].set_ylim([0,100])
         axes2[idx].yaxis.set_major_formatter(mtick.PercentFormatter()) 
         axes2[idx].vlines(x=[day*24 for day in range(7)],ymin=0,ymax=100,linestyle='--',color='black')
     axes2[idx].set_xlim([1,n])
-    axes2[idx].set_title(titles[idx], loc='center', x=-0.07, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
+    axes2[idx].set_ylim([0,1000])
+    axes2[idx].set_title(titles[idx], loc='center', x=-0.08, y=0.5, rotation=90, fontweight='bold', ha='center', va='center', fontsize=16)
     axes2[idx].tick_params(axis="x", labelsize=16)
     axes2[idx].tick_params(axis="y", labelsize=16)
     ax4 = axes2[idx].twinx()
-    ax4.plot(hour, elec_prices,linestyle='dotted', color='k',label='Grid Price')
-    ax4.set_ylabel('Grid Price ($/kWh)', ha='center', va='center', fontsize=16, labelpad=20)
-    ax4.set_ylim([0,0.3])
-    leg4 = ax4.legend(loc="lower left", frameon = False, bbox_to_anchor=(0.67, 1.0, 0.15, 1),
-        ncols=1, mode="expand", fontsize=14, borderaxespad=0.)
-    ax4.tick_params(axis="y", labelsize=16)
+    ax5 = axes2[idx].twinx()
+    ax4.spines.right.set_position(("axes", 1.1))
 
+    line1 = ax4.plot(hour, elec_prices, dashes=[6, 4], color="#ebe8e8", label='Grid Price')  
+    ax4.set_ylabel('Grid Price ($/kWh)', ha='center', va='center', fontsize=16, labelpad=20)
+    ax4.set_ylim([0,0.6])
+    ax4.yaxis.set_major_formatter('${x:1.2f}')
+    leg4 = ax4.legend(loc="lower left", frameon = False, bbox_to_anchor=(0.8, 1.0, 0.15, 1),
+        ncols=1, mode="expand", fontsize=14, borderaxespad=0.)
+
+    line2 = ax5.plot(hour, lcow,linestyle='dashed', color='k',label='LCOW')
+    ax5.set_ylabel(f"LCOW ({str('$')}"+f'/m3)', ha='center', va='center', fontsize=16, labelpad=20)
+    ax5.set_ylim([0,1.5])
+    ax5.yaxis.set_major_formatter('${x:1.2f}')
+    leg5 = ax5.legend(loc="lower left", frameon = False, bbox_to_anchor=(0.67, 1.0, 0.15, 1),
+        ncols=1, mode="expand", fontsize=14, borderaxespad=0.)
+    
+    ax4.tick_params(axis="y", labelsize=16)
+    ax5.tick_params(axis="y", labelsize=16)
+
+    ax4.spines['right'].set_color("#6e6e6e")
+    ax5.spines['right'].set_color("k")
+    ax4.tick_params(axis='y', colors="#6e6e6e")
+    ax5.tick_params(axis='y', colors="k")
+    ax4.yaxis.label.set_color("#6e6e6e")
+    ax5.yaxis.label.set_color('k')
+
+    ab = ax5.annotate(f"LCOW=${mp.LCOW():1.2f}", (0.01, 0.85), xycoords='axes fraction', 
+                        fontsize=16, color="k",
+                        bbox=dict(boxstyle="square",
+                        fc="white", ec="k", lw=1))
+    
+    ac = ax5.annotate(f"Battery Size={value(mp.blocks[0].process.fs.battery.nameplate_energy):1.0f} kWh", (0.8, 0.85), xycoords='axes fraction', 
+                        fontsize=16, color="k",
+                        bbox=dict(boxstyle="square",
+                        fc="white", ec="k", lw=1))
+    
+    ab.set_zorder(100)
     
 if __name__ == "__main__":
     rep_days, key_days = get_rep_weeks()
@@ -296,11 +345,34 @@ if __name__ == "__main__":
     elec_prices = ([get_elec_tier(key_days[1]+datetime.timedelta(days=t//24), t%24) for t in range(7*24)])
     mp = create_multiperiod_pv_battery_model(surrogate = surr, start_date = key_days[1])
     results = solver.solve(mp)
+    # lcow = ([((value(mp.total_capital_cost) / 20 /365 / 24) + value(mp.blocks[i].process.grid_cost)) /
+    #         value(pyunits.convert(6000 * pyunits.m**3 / pyunits.day, to_units=pyunits.m**3 / pyunits.hour)) for i in range(7*24)])
+    # grid_cost = ([value(mp.blocks[i].process.grid_cost)/
+    #         value(pyunits.convert(6000 * pyunits.m**3 / pyunits.day, to_units=pyunits.m**3 / pyunits.hour)) for i in range(7*24) ])
+    # grid_to_ro = [mp.blocks[i].process.fs.grid_to_ro() for i in range(7*24)]
+    # pv_to_ro = [mp.blocks[i].process.fs.pv_to_ro() for i in range(7*24)]
 
-    for idx, period in enumerate(['Summer Solstice','Winter Solstice','Spring Eq', 'Fall Eq']):
+    # axes[0].plot(elec_prices,linestyle='dotted', color='k',label='Grid Price')
+    # axes[0].plot(grid,linestyle='dotted', color='red',label='Grid Cost')
+    # axes[0].plot(lcow,linestyle='dotted', color='blue',label='LCOW')
+    # axes[1].plot(grid_to_ro,linestyle='dotted', color='k',label='Grid to RO')
+    # axes[1].plot(pv_to_ro,linestyle='dotted', color='blue',label='Grid to RO')
+
+    # print('pv size: ', value(mp.blocks[0].process.fs.pv_size))
+    # print('battery power: ', value(mp.blocks[0].process.fs.battery.nameplate_power))
+    # print('battery energy: ', value(mp.blocks[0].process.fs.battery.nameplate_energy))
+    # # print(f'{"RO Capital Cost:":<25s}{f"${value(mp.total_capital_cost):<25,.0f}"}')
+    # print(f'{"PV Capital Cost:":<25s}{f"${value(mp.pv_capital_cost):<25,.0f}"}')
+    # print(f'{"Battery Capital Cost:":<25s}{f"${value(mp.battery_capital_cost):<25,.0f}"}')
+    # print(f'{"Total Capital Cost:":<25s}{f"${value(mp.total_capital_cost):<25,.0f}"}')
+    # # print(f'{"LCOW:":<25s}{f"${value(mp.LCOW):<25,.4f}"}')
+    lcows = []
+    batt_size = []
+    # for idx, period in enumerate(['Summer Solstice','Winter Solstice','Spring Eq', 'Fall Eq']):
+    for idx, period in enumerate(['Spring Eq','Summer Solstice', 'Fall Eq','Winter Solstice']):
         surr = load_surrogate(surrogate_filename=join(parent_dir+'/net_metering/pysam_data/', "pv_"+period.replace(" ","_")+"_surrogate_week.json"))
         elec_prices = ([get_elec_tier(key_days[idx]+datetime.timedelta(days=t//24), t%24) for t in range(7*24)])
-        mp = create_multiperiod_pv_battery_model(surrogate = surr, start_date = key_days[idx], pv_oversize = 2)
+        mp = create_multiperiod_pv_battery_model(surrogate = surr, start_date = key_days[idx], pv_oversize = 1)
         results = solver.solve(mp)
         create_plot(mp, idx, elec_prices, norm=False)
         fig.tight_layout()
@@ -309,7 +381,10 @@ if __name__ == "__main__":
         print('battery power: ', value(mp.blocks[0].process.fs.battery.nameplate_power))
         print('battery energy: ', value(mp.blocks[0].process.fs.battery.nameplate_energy))
         print('total cost: ', value(mp.LCOW))
-
-    fig.savefig(absolute_path+'/plots/week_surrogate_battery_state_overload.png', dpi=900)
-    fig2.savefig(absolute_path+'/plots/week_surrogate_load_overload.png', dpi=900)
+        lcows.append(value(mp.LCOW))
+        batt_size.append(value(mp.blocks[0].process.fs.battery.nameplate_energy))
+    # # fig.savefig(absolute_path+'/plots/week_surrogate_battery_state_overload.png', dpi=900)
+    # fig2.savefig(absolute_path+'/plots/week_surrogate_load_oversize_LCOW_BattSize.png', dpi=1200)
+    print(lcows)
+    print(batt_size)
     plt.show()

@@ -64,7 +64,8 @@ def build_pv_battery_flowsheet(m = None,
                                electricity_price = 0.1,
                                ro_capacity = 6000,
                                ro_elec_req = 944.3,
-                               pv_oversize = 1):
+                               pv_oversize = 1,
+                               fixed_battery_size = None):
     """Builds the structure of the PV-RO-battery system
 
     Returns:
@@ -106,7 +107,7 @@ def build_pv_battery_flowsheet(m = None,
     m.fs.elec_price = Var(
             initialize = electricity_price,
             bounds = (0,None),
-            units = pyunits.USD_2021,
+            units = pyunits.USD_2021 / pyunits.kWh,
             doc = 'Electric Cost'
         )
     
@@ -117,6 +118,13 @@ def build_pv_battery_flowsheet(m = None,
             doc = 'PV Power Gen'
         )
     
+    m.fs.lcow = Var(
+            initialize = 0.45,
+            bounds = (0,None),
+            units = pyunits.USD_2021,
+            doc = 'LCOW'
+        )
+    
     # Add energy flow balance
     @m.Constraint(doc="System energy flow")
     def eq_pv_elec_gen(b):
@@ -124,6 +132,8 @@ def build_pv_battery_flowsheet(m = None,
         pv_gen == b.fs.pv_to_ro + b.fs.battery.elec_in[0] + b.fs.curtailment
         # pv_gen == b.fs.pv_to_ro + b.fs.battery.elec_in[0] + b.fs.curtailment
         )
+        heat_sell = treat.heat_in(const) + grid_heat_ini_srcA(const) + grid_heat_in_srB(const) - treat_heat_out(const)
+        treat_elec = grid_heat_ini_srcA(const) + grid_heat_in_srB(const) + heat_sell
 
     @m.Constraint(doc="RO electricity requirment")
     def eq_ro_elec_req(b):
@@ -133,7 +143,7 @@ def build_pv_battery_flowsheet(m = None,
     # Add grid electricity cost
     @m.Expression(doc="grid cost")
     def grid_cost(b):
-        return (electricity_price * b.fs.grid_to_ro * b.fs.battery.dt)
+        return (electricity_price * b.fs.grid_to_ro)
     
     # # Add grid electricity cost
     # @m.Expression(doc="electricity cost")
@@ -191,4 +201,4 @@ if __name__ == "__main__":
 
     print('\n')
     for v in m.fs.component_data_objects(ctype=Var, active=True, descend_into=True):
-            print(f'{str(v):<40s}', f'{value(v):<10,.1f}', pyunits.get_units(v))
+        print(f'{str(v):<40s}', f'{value(v):<10,.1f}', pyunits.get_units(v))
