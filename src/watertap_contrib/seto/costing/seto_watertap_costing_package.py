@@ -149,6 +149,13 @@ class SETOWaterTAPCostingData(WaterTAPCostingData):
             units=self.base_currency / self.base_period,
         )
 
+        self.total_electric_operating_cost = pyo.Var(
+            initialize=1e3,
+            domain=pyo.Reals,
+            doc="Total operating cost",
+            units=self.base_currency / self.base_period,
+        )
+
         self.total_capital_cost_constraint = pyo.Constraint(
             expr=self.total_capital_cost
             == self.factor_total_investment * self.aggregate_capital_cost
@@ -164,6 +171,11 @@ class SETOWaterTAPCostingData(WaterTAPCostingData):
             + self.aggregate_fixed_operating_cost
             + self.aggregate_variable_operating_cost
             + sum(self.aggregate_flow_costs.values()) * self.utilization_factor
+        )
+
+        self.total_electric_operating_cost_constraint = pyo.Constraint(
+            expr=self.total_electric_operating_cost
+            == sum(self.aggregate_flow_costs.values()) * self.utilization_factor
         )
 
 
@@ -271,6 +283,12 @@ class SETOSystemCostingData(FlowsheetCostingBlockData):
             units=self.base_currency,
         )
         self.total_operating_cost = pyo.Var(
+            initialize=1e3,
+            # domain=pyo.NonNegativeReals,
+            doc="Total operating cost for integrated system",
+            units=self.base_currency / self.base_period,
+        )
+        self.total_electric_operating_cost = pyo.Var(
             initialize=1e3,
             # domain=pyo.NonNegativeReals,
             doc="Total operating cost for integrated system",
