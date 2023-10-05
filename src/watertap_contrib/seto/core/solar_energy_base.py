@@ -71,6 +71,7 @@ class SolarEnergyBaseData(UnitModelBlockData):
         self._tech_type = None
         self._scaling = None
 
+#NOTE changing the domain to NonNegativeReals for electricity is causing the PV_RO to not solve
         self.electricity = Var(
             initialize=1e3,
             units=pyunits.kW,
