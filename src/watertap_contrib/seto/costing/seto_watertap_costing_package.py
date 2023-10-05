@@ -246,6 +246,14 @@ class SETOSystemCostingData(FlowsheetCostingBlockData):
             doc="Weighted Average Cost of Capital [WACC]",
         )
 
+        self.electricity_cost = pyo.Param(
+            mutable=True,
+            initialize=0.0718,  # From EIA for 2021
+            doc="Electricity cost",
+            units=self.base_currency / pyo.units.kWh,
+        )
+        
+        self.add_defined_flow("electricity", self.electricity_cost)
 
         self.electrical_carbon_intensity = pyo.Param(
             mutable=True,
