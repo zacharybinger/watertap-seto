@@ -75,7 +75,8 @@ class SolarEnergyBaseData(UnitModelBlockData):
         self.electricity = Var(
             initialize=1e3,
             units=pyunits.kW,
-            domain=NonNegativeReals,
+            bounds=(None, None),
+            # domain=NonNegativeReals,
             doc="Electricity production of solar process",
         )
 

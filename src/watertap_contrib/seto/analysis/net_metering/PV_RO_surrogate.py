@@ -335,14 +335,21 @@ def add_costing(m, cap_max=None, elec_sell_price=None):
     )
     treatment.costing.cost_process()
 
-    m.fs.energy.pv_design_constraint = Constraint(
-        expr=m.fs.energy.pv.design_size
-        == m.fs.treatment.costing.aggregate_flow_electricity
-    )
+    # m.fs.energy.pv_design_constraint = Constraint(
+    #     expr=m.fs.energy.pv.design_size
+    #     == m.fs.treatment.costing.aggregate_flow_electricity
+    # )
 
     # m.fs.energy.pv_electricity_constraint = Constraint(
-    #     expr=m.fs.energy.pv.electricity <= 0
+    #     expr=m.fs.energy.pv.electricity >= 1000
     # )
+
+    # m.fs.energy.pv_design_constraint = Constraint(
+    #     expr=m.fs.energy.pv.design_size == 10*m.fs.treatment.costing.aggregate_flow_electricity
+    # )
+    m.fs.energy.pv_design_constraint = Constraint(
+        expr=m.fs.energy.pv.design_size <= 59269
+    )
 
     m.fs.energy.pv.costing.land_constraint = Constraint(
         expr=m.fs.energy.pv.costing.land_area == m.fs.energy.pv.land_req
@@ -459,17 +466,20 @@ def solve(m, solver=None, tee=False, check_termination=True):
     if solver is None:
         solver = get_solver()
 
-    try:
-        results = solver.solve(m, tee=tee)
-    except:
-        results = debug(m, automate_rescale=True, resolve=True)
-    if check_termination:
-        termination = check_optimal_termination(results)
-        if termination != True:
-            results = debug(m, automate_rescale=True, resolve=True)
-        assert_optimal_termination(results)
-    print(f"\nDOF = {degrees_of_freedom(m)}")
-    print(f"MODEL SOLVE = {results.solver.termination_condition.swapcase()}")
+    # try:
+    results = solver.solve(m, tee=tee)
+    display_ro_pv_results(m)
+    # display_costing_breakdown(m)
+    print_close_to_bounds(m)
+    # except:
+    #     results = debug(m, automate_rescale=True, resolve=True)
+    # if check_termination:
+    #     termination = check_optimal_termination(results)
+    #     if termination != True:
+    #         results = debug(m, automate_rescale=True, resolve=True)
+    #     assert_optimal_termination(results)
+    # print(f"\nDOF = {degrees_of_freedom(m)}")
+    # print(f"MODEL SOLVE = {results.solver.termination_condition.swapcase()}")
 
     return results
 
@@ -478,7 +488,7 @@ def model_setup(Q, conc, recovery):
     m = build_ro_pv()
     set_operating_conditions(m, flow_in=Q, conc_in=conc, water_recovery=recovery)
     initialize_sys(m, water_recovery=recovery)
-    add_costing(m)
+    add_costing(m, cap_max=1000000)
     fix_treatment_global_params(m)
     optimize_setup(m, m.fs.sys_costing.LCOW)
     return m
@@ -499,7 +509,7 @@ def main():
     m = model_setup(mgd_to_m3s(1), 30, 0.5)
     m, results = run(m)
     costing_data = generate_detailed_costing_report(m, "Process")
-
+    # display_costing_breakdown(m)
     return m, results
 
 

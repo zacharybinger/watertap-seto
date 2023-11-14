@@ -187,3 +187,4 @@ def cost_pv_surrogate(blk):
     )
 
     blk.costing_package.cost_flow(blk.unit_model.electricity, "electricity")
+    # blk.costing_package.cost_flow(blk.unit_model.electricity, "electricity_sell")
