@@ -226,8 +226,8 @@ def initialize_treatment(m, water_recovery=0.5):
 
     propagate_state(m.fs.treatment.a2)
     ro.initialize()
-    ro.area.unfix()
-    ro.recovery_mass_phase_comp[0, "Liq", "H2O"].fix(water_recovery)
+    # ro.area.unfix()
+    # ro.recovery_mass_phase_comp[0, "Liq", "H2O"].fix(water_recovery)
 
     propagate_state(m.fs.treatment.a4)
     erd.efficiency_pump.fix(0.95)
@@ -337,19 +337,20 @@ def add_costing(m, cap_max=None, elec_sell_price=None):
 
     # m.fs.energy.pv_design_constraint = Constraint(
     #     expr=m.fs.energy.pv.design_size
-    #     == m.fs.treatment.costing.aggregate_flow_electricity
+    #     == 1.2*m.fs.treatment.costing.aggregate_flow_electricity
     # )
 
-    # m.fs.energy.pv_electricity_constraint = Constraint(
-    #     expr=m.fs.energy.pv.electricity >= 1000
-    # )
+    m.fs.energy.pv_elec_constraint = Constraint(
+        expr=m.fs.energy.pv.electricity
+        == -1.5*m.fs.treatment.costing.aggregate_flow_electricity
+    )
 
     # m.fs.energy.pv_design_constraint = Constraint(
     #     expr=m.fs.energy.pv.design_size == 10*m.fs.treatment.costing.aggregate_flow_electricity
     # )
-    m.fs.energy.pv_design_constraint = Constraint(
-        expr=m.fs.energy.pv.design_size <= 59269
-    )
+    # m.fs.energy.pv_design_constraint = Constraint(
+    #     expr=m.fs.energy.pv.design_size <= 59269
+    # )
 
     m.fs.energy.pv.costing.land_constraint = Constraint(
         expr=m.fs.energy.pv.costing.land_area == m.fs.energy.pv.land_req
@@ -468,9 +469,9 @@ def solve(m, solver=None, tee=False, check_termination=True):
 
     # try:
     results = solver.solve(m, tee=tee)
-    display_ro_pv_results(m)
+    
     # display_costing_breakdown(m)
-    print_close_to_bounds(m)
+
     # except:
     #     results = debug(m, automate_rescale=True, resolve=True)
     # if check_termination:
@@ -493,6 +494,13 @@ def model_setup(Q, conc, recovery):
     optimize_setup(m, m.fs.sys_costing.LCOW)
     return m
 
+def system_build(Q, conc, recovery):
+    m = build_ro_pv()
+    set_operating_conditions(m, flow_in=Q, conc_in=conc, water_recovery=recovery)
+    initialize_sys(m, water_recovery=recovery)
+    add_costing(m)
+
+    return m
 
 def run(m):
     results = solve(m)
@@ -506,10 +514,13 @@ def mgd_to_m3s(Q):
 
 
 def main():
-    m = model_setup(mgd_to_m3s(1), 30, 0.5)
+    m = system_build(mgd_to_m3s(1), 30, 0.5)
     m, results = run(m)
-    costing_data = generate_detailed_costing_report(m, "Process")
+    # costing_data = generate_detailed_costing_report(m, "Process")
     # display_costing_breakdown(m)
+    print(m.fs.sys_costing.aggregate_flow_electricity())
+    print(m.fs.sys_costing.total_electric_operating_cost())
+
     return m, results
 
 

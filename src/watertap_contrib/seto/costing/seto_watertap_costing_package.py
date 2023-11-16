@@ -331,6 +331,14 @@ class SETOSystemCostingData(FlowsheetCostingBlockData):
             + en_cost.aggregate_flow_electricity
         )
 
+        self.total_electric_operating_cost_constraint = pyo.Constraint(
+            expr=self.total_electric_operating_cost
+            == pyo.units.convert(
+                treat_cost.total_electric_operating_cost + en_cost.total_electric_operating_cost,
+                to_units=self.base_currency / self.base_period,
+            )
+        )
+
         # if all("heat" in b.defined_flows for b in [treat_cost, en_cost]):
         if all(hasattr(b, "aggregate_flow_heat") for b in [treat_cost, en_cost]):
             self.aggregate_flow_heat_constraint = pyo.Constraint(
