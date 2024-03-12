@@ -51,7 +51,7 @@ def define_system_vars(m):
     m.fs.electricity_price = Var(
         initialize=0.1,
         bounds=(0, None),
-        units=pyunits.USD_2021,
+        units=pyunits.USD_2024,
         doc="Electricity Price",
     )
 

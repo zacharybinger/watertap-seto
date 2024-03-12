@@ -45,38 +45,42 @@ from watertap.unit_models.reverse_osmosis_0D import (
     MassTransferCoefficient,
 )
 
+class ROUnit:
+    def __init__(self):
+        self.product = 6000  # m3/day
+        self.power_demand = 1000  # kW
 
-def create_RO_unit():
-    # Create a Pyomo concrete model, flowsheet, and NaCl property parameter block.
-    m = ConcreteModel()
-    m.fs = FlowsheetBlock(dynamic=False)
-    m.fs.properties = NaClParameterBlock()
+    def create_RO_unit(self):
+        # Create a Pyomo concrete model, flowsheet, and NaCl property parameter block.
+        m = ConcreteModel()
+        m.fs = FlowsheetBlock(dynamic=False)
+        m.fs.properties = NaClParameterBlock()
 
-    m.fs.feed = Feed(property_package=m.fs.properties)
-    m.fs.product = Product(property_package=m.fs.properties)
-    m.fs.disposal = Product(property_package=m.fs.properties)
+        m.fs.feed = Feed(property_package=m.fs.properties)
+        m.fs.product = Product(property_package=m.fs.properties)
+        m.fs.disposal = Product(property_package=m.fs.properties)
 
-    m.fs.pump = Pump(property_package=m.fs.properties)
+        m.fs.pump = Pump(property_package=m.fs.properties)
 
-    # Add an RO unit to the flowsheet.
-    m.fs.RO = ReverseOsmosis0D(
-        property_package=m.fs.properties,
-        concentration_polarization_type=ConcentrationPolarizationType.none,
-        mass_transfer_coefficient=MassTransferCoefficient.none,
-        has_pressure_change=False,
-    )
+        # Add an RO unit to the flowsheet.
+        m.fs.RO = ReverseOsmosis0D(
+            property_package=m.fs.properties,
+            concentration_polarization_type=ConcentrationPolarizationType.none,
+            mass_transfer_coefficient=MassTransferCoefficient.none,
+            has_pressure_change=False,
+        )
 
-    m.fs.erd = EnergyRecoveryDevice(property_package=m.fs.properties)
+        m.fs.erd = EnergyRecoveryDevice(property_package=m.fs.properties)
 
-    m.fs.a1 = Arc(source=m.fs.feed.outlet, destination=m.fs.pump.inlet)
-    m.fs.a2 = Arc(source=m.fs.pump.outlet, destination=m.fs.RO.inlet)
-    m.fs.a3 = Arc(source=m.fs.RO.permeate, destination=m.fs.product.inlet)
-    m.fs.a4 = Arc(source=m.fs.RO.retentate, destination=m.fs.erd.inlet)
-    m.fs.a5 = Arc(source=m.fs.erd.outlet, destination=m.fs.disposal.inlet)
+        m.fs.a1 = Arc(source=m.fs.feed.outlet, destination=m.fs.pump.inlet)
+        m.fs.a2 = Arc(source=m.fs.pump.outlet, destination=m.fs.RO.inlet)
+        m.fs.a3 = Arc(source=m.fs.RO.permeate, destination=m.fs.product.inlet)
+        m.fs.a4 = Arc(source=m.fs.RO.retentate, destination=m.fs.erd.inlet)
+        m.fs.a5 = Arc(source=m.fs.erd.outlet, destination=m.fs.disposal.inlet)
 
-    TransformationFactory("network.expand_arcs").apply_to(m)
+        TransformationFactory("network.expand_arcs").apply_to(m)
 
-    return m
+        return self.m
 
 
 def set_RO_operating_conditions(m, flow_in=1e-2, conc_in=30, water_recovery=0.5):
