@@ -41,6 +41,7 @@ from watertap.core.solvers import get_solver
 from watertap_contrib.reflo.costing.units.chemical_softening import (
     cost_chemical_softening,
 )
+from watertap.core.util.initialization import interval_initializer
 
 __author__ = "Mukta Hardikar, Abdiel Lugo, Kurban Sitterley, Zachary Binger"
 
@@ -183,6 +184,12 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
             initialize=56,
             units=pyunits.g / pyunits.mol,
             doc="Molecular weight of CaO (dry lime)",
+        )
+
+        self.Ca_mw = Param(
+            initialize=40,
+            units=pyunits.g / pyunits.mol,
+            doc="Molecular weight of Ca",
         )
 
         self.Ca_mw = Param(
@@ -453,6 +460,7 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
         self.excess_CaO = Var(
             initialize=0,
             bounds=(0, None),  # typically 30-70 mg/L, MWH
+            bounds=(0, None),  # typically 30-70 mg/L, MWH
             units=pyunits.kg / pyunits.m**3,
             doc="Excess lime requiremenent",
         )
@@ -465,6 +473,7 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
         )
 
         self.CO2_CaCO3 = Var(
+            initialize=0.1,
             initialize=0.1,
             units=pyunits.kg / pyunits.m**3,
             bounds=(0, None),
@@ -745,6 +754,23 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
                     * b.excess_CaO_coeff
                 )
 
+            # @self.Expression(doc="Lime dosing")
+            # def CaO_dosing(b):
+            #     return pyunits.convert(
+            #         (
+            #             b.CO2_CaCO3
+            #             + b.properties_in[0].conc_mass_phase_comp[
+            #                 "Liq", "Alkalinity_2-"
+            #             ]
+            #             + b.Mg_CaCO3
+            #             + b.excess_CaO
+            #         )
+            #         * b.properties_in[0].flow_vol_phase["Liq"]
+            #         * b.CaO_mw
+            #         / b.CaCO3_mw,
+            #         to_units=pyunits.kg / pyunits.d,
+            #     )
+
             @self.Constraint(doc="Lime dosing")
             def eq_CaO_dosing(b):
                 return b.CaO_dosing == pyunits.convert(
@@ -761,6 +787,7 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
                     / b.CaCO3_mw,
                     to_units=pyunits.kg / pyunits.d,
                 )
+
 
             @self.Constraint(doc="CO2 for first basin")
             def eq_CO2_first_basin(b):
@@ -990,6 +1017,14 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
                 to_units=pyunits.kg / pyunits.s,
             )
 
+        # @self.Constraint(doc="Ca mass balance")
+        # def eq_mass_balance_ca(b):
+        #     return (
+        #         b.properties_waste[0].flow_mass_phase_comp["Liq", "Ca_2+"]
+        #         + b.properties_out[0].flow_mass_phase_comp["Liq", "Ca_2+"]
+        #         == b.properties_in[0].flow_mass_phase_comp["Liq", "Ca_2+"]
+        #     )
+
         @self.Constraint(doc="Ca mass balance")
         def eq_mass_balance_ca(b):
             return (
@@ -1178,6 +1213,8 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
 
         init_log.info("Initialization Step 1c Complete.")
 
+        # interval_initializer(blk)
+
         # Solve unit
         with idaeslog.solver_log(solve_log, idaeslog.DEBUG) as slc:
             res = opt.solve(blk, tee=slc.tee)
@@ -1300,7 +1337,7 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
             iscale.constraint_scaling_transform(self.eq_Na2CO3_dosing, 1e-4)
             iscale.constraint_scaling_transform(self.eq_CO2_second_basin, 1e-2)
 
-        iscale.constraint_scaling_transform(self.eq_CaO_dosing, 1e-3)
+        # iscale.constraint_scaling_transform(self.eq_CaO_dosing, 1e-3)
 
         iscale.constraint_scaling_transform(self.eq_CO2_first_basin, 1e-3)
 
