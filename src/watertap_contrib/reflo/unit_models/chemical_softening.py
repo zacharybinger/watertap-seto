@@ -460,7 +460,6 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
         self.excess_CaO = Var(
             initialize=0,
             bounds=(0, None),  # typically 30-70 mg/L, MWH
-            bounds=(0, None),  # typically 30-70 mg/L, MWH
             units=pyunits.kg / pyunits.m**3,
             doc="Excess lime requiremenent",
         )
@@ -473,7 +472,6 @@ class ChemicalSofteningData(InitializationMixin, UnitModelBlockData):
         )
 
         self.CO2_CaCO3 = Var(
-            initialize=0.1,
             initialize=0.1,
             units=pyunits.kg / pyunits.m**3,
             bounds=(0, None),
